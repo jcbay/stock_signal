@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>股票信号分析系统 v3</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-card: #0f3460;
+      --bg-card-hover: #1a4a8a;
+      --text-primary: #e0e0e0;
+      --text-secondary: #a0a0b0;
+      --text-muted: #606070;
+      --border: #2a2a4a;
+      --red-up: #e74c3c;
+      --green-down: #2ecc71;
+      --blue: #3498db;
+      --purple: #9b59b6;
+      --orange: #e67e22;
+      --yellow: #f1c40f;
+      --cyan: #00bcd4;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    /* 自选股浮动抽屉 */
+    .watchlist-sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 260px;
+      background: var(--bg-secondary);
+      padding: 16px 14px;
+      z-index: 900;
+      transform: translateX(-100%);
+      transition: transform 0.3s ease;
+      overflow-y: auto;
+      box-shadow: 4px 0 20px rgba(0,0,0,0.4);
+    }
+
+    .watchlist-sidebar.open { transform: translateX(0); }
+
+    .watchlist-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 850;
+    }
+
+    .watchlist-overlay.visible { display: block; }
+
+    .wl-toggle-btn {
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-card);
+      color: var(--cyan);
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .wl-toggle-btn:hover { border-color: var(--cyan); }
+
+    .watchlist-sidebar .wl-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .watchlist-sidebar .wl-title { font-size: 14px; font-weight: 500; color: var(--cyan); }
+    .watchlist-sidebar .wl-count { font-size: 12px; color: var(--text-muted); }
+
+    .watchlist-sidebar .wl-add-btn {
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .watchlist-sidebar .wl-add-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+    .watchlist-sidebar .wl-empty {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 20px 0;
+    }
+
+    .watchlist-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 4px;
+      transition: background 0.2s;
+    }
+
+    .watchlist-item:hover { background: var(--bg-card); }
+    .watchlist-item.active { background: var(--bg-card); border: 1px solid var(--cyan); }
+
+    .watchlist-item .wl-info { flex: 1; min-width: 0; }
+    .watchlist-item .wl-name { font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .watchlist-item .wl-code { font-size: 11px; color: var(--text-muted); }
+    .watchlist-item .wl-score { flex: 0 0 auto; font-size: 13px; font-weight: 600; margin-right: 6px; }
+
+    .watchlist-item .wl-delete {
+      flex: 0 0 auto;
+      width: 20px; height: 20px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 14px;
+      border-radius: 4px;
+      display: none;
+    }
+
+    .watchlist-item:hover .wl-delete { display: flex; align-items: center; justify-content: center; }
+    .watchlist-item .wl-delete:hover { color: var(--red-up); background: rgba(231,76,60,0.15); }
+
+    .wl-score-high { color: var(--red-up); }
+    .wl-score-mid { color: var(--yellow); }
+    .wl-score-low { color: var(--green-down); }
+    .wl-score-none { color: var(--text-muted); }
+
+    .content-area { flex: 1; min-width: 0; }
+
+    header {
+      text-align: center;
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    header h1 { font-size: 22px; color: var(--cyan); font-weight: 500; }
+    header .subtitle { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+
+    .search-bar {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      padding: 16px;
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+
+    .search-bar input {
+      width: 200px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .search-bar input:focus { border-color: var(--cyan); }
+
+    .period-btn {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .period-btn.active { background: var(--cyan); color: #fff; border-color: var(--cyan); }
+
+    .analyze-btn {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      background: var(--cyan);
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .analyze-btn:hover { opacity: 0.9; }
+    .analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .scan-btn {
+      padding: 10px 24px;
+      border: 1px solid var(--cyan);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--cyan);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .scan-btn:hover { background: rgba(0,188,212,0.15); }
+    .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .dashboard-btn {
+      padding: 10px 24px;
+      border: 1px solid var(--purple);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--purple);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .dashboard-btn:hover { background: rgba(155,89,182,0.15); }
+
+    .market-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      margin-left: 10px;
+    }
+
+    .market-bull { background: rgba(231,76,60,0.2); color: var(--red-up); border: 1px solid rgba(231,76,60,0.4); }
+    .market-bear { background: rgba(46,204,113,0.2); color: var(--green-down); border: 1px solid rgba(46,204,113,0.4); }
+    .market-range { background: rgba(241,196,15,0.2); color: var(--yellow); border: 1px solid rgba(241,196,15,0.4); }
+    .market-unknown { background: rgba(160,160,176,0.2); color: var(--text-secondary); border: 1px solid rgba(160,160,176,0.4); }
+
+    .result-area { display: none; }
+    .result-area.visible { display: block; }
+
+    .error-msg {
+      text-align: center;
+      padding: 20px;
+      color: var(--red-up);
+      font-size: 14px;
+      background: rgba(231,76,60,0.1);
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+
+    /* ====== P0: 大白话总结 ====== */
+    .summary-card {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+    }
+
+    .summary-card .summary-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--cyan);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .summary-section {
+      margin-bottom: 14px;
+      padding: 12px 16px;
+      border-radius: 8px;
+    }
+
+    .summary-situation { background: rgba(0,188,212,0.08); }
+    .summary-action { background: rgba(231,76,60,0.08); }
+    .summary-plan { background: rgba(241,196,15,0.08); }
+
+    .summary-section .sec-label {
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+
+    .summary-situation .sec-label { color: var(--cyan); }
+    .summary-action .sec-label { color: var(--red-up); }
+    .summary-plan .sec-label { color: var(--yellow); }
+
+    .summary-section .sec-text {
+      font-size: 14px;
+      color: var(--text-primary);
+      line-height: 1.8;
+    }
+
+    /* ====== 综合建议卡 ====== */
+    .recommendation-card {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .stock-info { flex: 0 0 auto; }
+    .stock-info .name { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+    .stock-info .price { font-size: 24px; font-weight: 700; margin-top: 4px; }
+    .stock-info .price.up { color: var(--red-up); }
+    .stock-info .price.down { color: var(--green-down); }
+    .stock-info .change { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+    .recommendation-main { flex: 1; }
+    .recommendation-text { font-size: 16px; font-weight: 500; margin-bottom: 6px; }
+
+    .signal-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      margin-left: 6px;
+    }
+
+    .signal-strong-buy { background: rgba(231,76,60,0.3); color: var(--red-up); }
+    .signal-buy { background: rgba(231,76,60,0.15); color: var(--red-up); }
+    .signal-hold { background: rgba(241,196,15,0.15); color: var(--yellow); }
+    .signal-sell { background: rgba(46,204,113,0.15); color: var(--green-down); }
+    .signal-strong-sell { background: rgba(46,204,113,0.3); color: var(--green-down); }
+
+    .overall-score { font-size: 13px; color: var(--text-secondary); }
+
+    .veto-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      background: rgba(231,76,60,0.2);
+      color: var(--red-up);
+      border: 1px solid rgba(231,76,60,0.4);
+      margin-left: 8px;
+    }
+
+    /* ====== P2: 场景推演 ====== */
+    .scenario-card {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+    }
+
+    .scenario-card .scenario-title {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--orange);
+      margin-bottom: 16px;
+    }
+
+    .scenario-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .scenario-item {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+    }
+
+    .scenario-item .scenario-label {
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .scenario-optimistic .scenario-label { color: var(--red-up); }
+    .scenario-neutral .scenario-label { color: var(--yellow); }
+    .scenario-pessimistic .scenario-label { color: var(--green-down); }
+
+    .scenario-item .scenario-change {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .scenario-optimistic .scenario-change { color: var(--red-up); }
+    .scenario-neutral .scenario-change { color: var(--yellow); }
+    .scenario-pessimistic .scenario-change { color: var(--green-down); }
+
+    .scenario-item .scenario-price { font-size: 13px; color: var(--text-secondary); }
+    .scenario-item .scenario-prob { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .scenario-item .scenario-condition { font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; }
+    .scenario-note { font-size: 12px; color: var(--text-muted); margin-top: 12px; }
+
+    /* ====== P1: 信号趋势图 ====== */
+    .signal-history-card {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+    }
+
+    .signal-history-card .sh-title {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--cyan);
+      margin-bottom: 12px;
+    }
+
+    #signal-history-chart { height: 180px; }
+
+    /* ====== 图表区域 ====== */
+    .charts-section { margin-bottom: 20px; }
+
+    .chart-container {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+
+    .chart-container .chart-title {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      padding-left: 4px;
+    }
+
+    #kline-chart { height: 400px; }
+    #volume-chart { height: 120px; }
+    #macd-chart { height: 150px; }
+    #rsi-chart { height: 150px; }
+    #radar-chart { height: 280px; }
+
+    /* ====== 因子评分卡片 ====== */
+    .factors-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .factor-card {
+      background: var(--bg-secondary);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .factor-card .factor-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .factor-card .factor-name { font-size: 14px; font-weight: 500; }
+    .factor-card .factor-score { font-size: 20px; font-weight: 700; }
+    .factor-card .factor-label { font-size: 12px; color: var(--text-muted); }
+
+    .factor-card .progress-bar {
+      height: 6px;
+      background: var(--bg-primary);
+      border-radius: 3px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+
+    .factor-card .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+
+    .factor-card .detail-list {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .factor-card .detail-list li {
+      margin-bottom: 4px;
+      list-style: none;
+      padding-left: 8px;
+    }
+
+    .score-high { color: var(--red-up); }
+    .score-mid { color: var(--yellow); }
+    .score-low { color: var(--green-down); }
+    .fill-high { background: var(--red-up); }
+    .fill-mid { background: var(--yellow); }
+    .fill-low { background: var(--green-down); }
+
+    /* ====== P1: 名词百科 tooltip ====== */
+    .term-tip {
+      position: relative;
+      display: inline;
+      cursor: help;
+      border-bottom: 1px dashed var(--cyan);
+    }
+
+    .term-tip .tip-content {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-card);
+      border: 1px solid var(--cyan);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--text-primary);
+      line-height: 1.6;
+      width: max-content;
+      max-width: 240px;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+
+    .term-tip:hover .tip-content { display: block; }
+
+    .term-tip .tip-content::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: var(--cyan);
+    }
+
+    /* ====== 风险管理 ====== */
+    .risk-panel {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .risk-panel .risk-title { font-size: 15px; font-weight: 500; color: var(--orange); margin-bottom: 16px; }
+
+    .risk-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .risk-item {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .risk-item .risk-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+    .risk-item .risk-value { font-size: 16px; font-weight: 600; }
+    .risk-high { color: var(--red-up); }
+    .risk-medium { color: var(--yellow); }
+    .risk-low { color: var(--green-down); }
+
+    /* ====== 回测面板 ====== */
+    .backtest-panel {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .backtest-panel .bt-title { font-size: 15px; font-weight: 500; color: var(--purple); margin-bottom: 16px; }
+
+    .bt-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+
+    .bt-item {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .bt-item .bt-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+    .bt-item .bt-value { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+
+    /* ====== 基本面数据 ====== */
+    .fundamentals-bar {
+      background: var(--bg-secondary);
+      border-radius: 10px;
+      padding: 14px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-around;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .fund-item { text-align: center; }
+    .fund-item .fund-label { font-size: 12px; color: var(--text-muted); }
+    .fund-item .fund-value { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+
+    /* ====== 权重说明 ====== */
+    .weights-section {
+      background: var(--bg-secondary);
+      border-radius: 10px;
+      padding: 14px 20px;
+      margin-bottom: 20px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .weights-section .wt-title { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
+
+    /* ====== 每日简报 ====== */
+    .briefing-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(26,26,46,0.85);
+      z-index: 950;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .briefing-overlay.visible { display: flex; }
+
+    .briefing-modal {
+      background: var(--bg-secondary);
+      border-radius: 16px;
+      padding: 28px;
+      max-width: 700px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+
+    .briefing-modal .bm-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--cyan);
+      margin-bottom: 6px;
+    }
+
+    .briefing-modal .bm-date {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .briefing-modal .bm-regime {
+      padding: 10px 16px;
+      border-radius: 8px;
+      background: rgba(0,188,212,0.08);
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    .briefing-section {
+      margin-bottom: 16px;
+    }
+
+    .briefing-section .bs-title {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+
+    .bs-buy-title { color: var(--red-up); }
+    .bs-hold-title { color: var(--yellow); }
+    .bs-sell-title { color: var(--green-down); }
+
+    .briefing-item {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    .briefing-item:hover { background: var(--bg-card-hover); }
+
+    .briefing-item .bi-score {
+      font-size: 18px;
+      font-weight: 700;
+      flex: 0 0 50px;
+    }
+
+    .briefing-item .bi-name { font-size: 14px; font-weight: 500; flex: 1; }
+    .briefing-item .bi-rec { font-size: 12px; color: var(--text-secondary); flex: 0 0 auto; }
+    .briefing-item .bi-risk { font-size: 11px; color: var(--text-muted); }
+    .briefing-item .bi-action { font-size: 12px; flex: 0 0 auto; }
+
+    .briefing-close {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .briefing-close button {
+      padding: 10px 30px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .briefing-close button:hover { border-color: var(--cyan); color: var(--cyan); }
+
+    /* ====== 仪表盘 ====== */
+    .dashboard-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(26,26,46,0.85);
+      z-index: 950;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .dashboard-overlay.visible { display: flex; }
+
+    .dashboard-modal {
+      background: var(--bg-secondary);
+      border-radius: 16px;
+      padding: 28px;
+      max-width: 700px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+    }
+
+    .dashboard-modal .dm-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--purple);
+      margin-bottom: 20px;
+    }
+
+    .dm-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .dm-stat-item {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .dm-stat-item .dm-label { font-size: 12px; color: var(--text-muted); }
+    .dm-stat-item .dm-value { font-size: 22px; font-weight: 700; }
+
+    .dm-signal-bar {
+      display: flex;
+      height: 8px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+
+    .dm-signal-buy { background: var(--red-up); }
+    .dm-signal-hold { background: var(--yellow); }
+    .dm-signal-sell { background: var(--green-down); }
+
+    .dm-concentration {
+      padding: 10px 16px;
+      border-radius: 8px;
+      background: rgba(231,76,60,0.1);
+      color: var(--red-up);
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    .dm-industries {
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .dm-stock-list {
+      margin-bottom: 20px;
+    }
+
+    .dm-stock-item {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dm-stock-item .dms-name { flex: 1; font-size: 13px; }
+    .dm-stock-item .dms-score { font-size: 16px; font-weight: 700; }
+    .dm-stock-item .dms-risk { font-size: 11px; color: var(--text-muted); }
+    .dm-stock-item .dms-action { font-size: 11px; }
+
+    .dashboard-close {
+      text-align: center;
+    }
+
+    .dashboard-close button {
+      padding: 10px 30px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .dashboard-close button:hover { border-color: var(--purple); color: var(--purple); }
+
+    /* ====== 加载动画 ====== */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(26,26,46,0.8);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .loading-overlay.visible { display: flex; }
+
+    .loading-spinner { text-align: center; color: var(--cyan); }
+
+    .loading-spinner .spinner-icon {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 12px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .disclaimer {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      padding: 16px 0;
+      border-top: 1px solid var(--border);
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>股票信号分析系统 v3</h1>
+      <div class="subtitle">正交因子 · 大白话解读 · 场景推演 · 信号追踪 · 名词百科 · 组合仪表盘</div>
+    </header>
+
+    <div class="search-bar">
+      <button class="wl-toggle-btn" onclick="toggleWatchlist()">
+        <span>&#9776;</span> 自选股 <span id="wl-count-badge" style="font-size:11px;color:var(--text-muted);"></span>
+      </button>
+      <input type="text" id="stock-code" placeholder="输入A股代码，如 600519" maxlength="6" onkeypress="if(event.key==='Enter')doAnalyze()">
+      <button class="period-btn active" data-period="3m" onclick="setPeriod(this)">3个月</button>
+      <button class="period-btn" data-period="1m" onclick="setPeriod(this)">1个月</button>
+      <button class="period-btn" data-period="6m" onclick="setPeriod(this)">6个月</button>
+      <button class="analyze-btn" id="analyze-btn" onclick="doAnalyze()">分析</button>
+      <button class="scan-btn" id="scan-btn" onclick="doDailyScan()">扫描自选股</button>
+      <button class="dashboard-btn" onclick="showDashboard()">组合仪表盘</button>
+      <span id="market-badge-container"></span>
+    </div>
+
+    <div id="error-area"></div>
+
+    <!-- 自选股浮动抽屉 -->
+    <div class="watchlist-overlay" id="wl-overlay" onclick="toggleWatchlist()"></div>
+    <div class="watchlist-sidebar" id="wl-sidebar">
+      <div class="wl-header">
+        <div>
+          <span class="wl-title">自选股</span>
+          <span class="wl-count" id="wl-count"></span>
+        </div>
+        <button class="wl-add-btn" onclick="addCurrentToWatchlist()">+ 添加当前</button>
+      </div>
+      <div id="watchlist-items"></div>
+    </div>
+
+    <!-- 每日简报弹窗 -->
+    <div class="briefing-overlay" id="briefing-overlay">
+      <div class="briefing-modal" id="briefing-modal"></div>
+    </div>
+
+    <!-- 组合仪表盘弹窗 -->
+    <div class="dashboard-overlay" id="dashboard-overlay">
+      <div class="dashboard-modal" id="dashboard-modal"></div>
+    </div>
+
+    <!-- 主内容区 -->
+    <div class="result-area" id="result-area">
+      <!-- P0: 大白话总结 -->
+      <div class="summary-card" id="summary-card"></div>
+
+      <!-- 综合建议卡 -->
+      <div class="recommendation-card" id="recommendation-card"></div>
+
+      <!-- P2: 场景推演 -->
+      <div class="scenario-card" id="scenario-card"></div>
+
+      <!-- P1: 信号趋势图 -->
+      <div class="signal-history-card" id="signal-history-card"></div>
+
+      <!-- K线主图 -->
+      <div class="charts-section">
+        <div class="chart-container">
+          <div class="chart-title">K线 · 均线 · 布林带</div>
+          <div id="kline-chart"></div>
+        </div>
+        <div class="chart-container">
+          <div class="chart-title">成交量</div>
+          <div id="volume-chart"></div>
+        </div>
+        <div class="chart-container">
+          <div class="chart-title">MACD</div>
+          <div id="macd-chart"></div>
+        </div>
+        <div class="chart-container">
+          <div class="chart-title">RSI · ADX</div>
+          <div id="rsi-chart"></div>
+        </div>
+      </div>
+
+      <!-- 评分雷达图 + 因子卡片 -->
+      <div class="chart-container" style="display:flex; gap:16px; align-items:center;">
+        <div style="flex:0 0 280px;">
+          <div class="chart-title">正交因子评分雷达</div>
+          <div id="radar-chart"></div>
+        </div>
+        <div style="flex:1;">
+          <div class="factors-grid" id="factors-grid"></div>
+        </div>
+      </div>
+
+      <!-- 风险管理 -->
+      <div class="risk-panel" id="risk-panel"></div>
+
+      <!-- 回测结果 -->
+      <div class="backtest-panel" id="backtest-panel"></div>
+
+      <!-- 基本面数据 -->
+      <div class="fundamentals-bar" id="fundamentals-bar"></div>
+
+      <!-- 权重说明 -->
+      <div class="weights-section" id="weights-section"></div>
+    </div>
+
+    <div class="disclaimer">
+      本系统仅供个人学习研究使用，不构成任何投资建议。投资有风险，决策需谨慎。<br>
+      数据来源：新浪财经(历史K线) + 腾讯财经(实时+基本面)，可能存在延迟。评分模型基于正交因子+Z-Score标准化，回测结果仅供参考。
+    </div>
+  </div>
+
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner">
+      <div class="spinner-icon"></div>
+      <div id="loading-text">正在获取数据并分析...</div>
+    </div>
+  </div>
+
+  <script>
+    let currentPeriod = '3m';
+    let charts = {};
+    let currentStockCode = '';
+
+    // ====== 名词百科字典 (P1-2) ======
+    const TERM_DICT = {
+      'MACD金叉': '短期上涨信号启动，就像汽车从刹车切换到加速。DIF线从下方穿过DEA线。',
+      'MACD死叉': '短期下跌信号启动，DIF线从上方穿过DEA线，趋势可能转向下行。',
+      'ADX': '趋势强度指标。>40=强趋势，25-40=中等趋势，<20=没有明确方向（纯震荡）。',
+      'BOLL收缩': '波动正在收窄，意味着接下来可能出现大动作（大涨或大跌），留意方向。',
+      'BOLL扩张': '波动正在放大，价格可能加速运动，注意方向。',
+      'OBV上涨': '买入的人比卖出的人多，资金在流入。',
+      'OBV下跌': '卖出的人比买入的人多，资金在流出。',
+      'MFI': '带成交量的RSI版本，比纯价格RSI更准确，兼顾资金流向。',
+      'RSI': '相对强度指标，测量价格偏离均值的程度。不是看绝对值，而是看百分位排名。',
+      'RSI百分位': '在最近60天里这个值排第几名，排名越高=越超买，越低=越超卖。',
+      'ATR': '真实波幅，最近每天平均波动多大。用来计算止损价（止损=当前价-2×ATR）。',
+      'PE': '市盈率=股价/每股利润，花多少倍的钱买它一年的利润。百分位低=历史上便宜。',
+      'PB': '市净率=股价/每股净资产，PB<1=破净（股价比公司账面价值还低）。',
+      'ROE': '净资产收益率，公司用股东的钱能赚多少回报。>15%=好公司，<8%=要怀疑。',
+      'Z-Score': '标准化评分，将各指标值在近期数据中做标准化，用相对位置而非绝对值评分。',
+      '百分位排名': '看当前值在历史数据中处于什么位置，而非看绝对数字大小。',
+      '趋势否决': '趋势动量评分低于25时，不管其他指标多好看都直接否决，建议观望。',
+      'Kelly公式': '根据胜率和盈亏比计算最优仓位。系统用保守的1/4 Kelly，更安全。',
+      'R/R比': '风险回报比=潜在收益/潜在亏损。>2才值得做，否则风险大于收益。',
+      'Sharpe比率': '每承受1单位风险能获得多少超额收益。>1算不错，>2算优秀。',
+      'Walk-forward回测': '用历史数据分段验证模型——训练集确定参数→测试集验证效果，避免用未来数据。',
+      '均线多头': '短周期均线在中/长周期均线之上，排列像阶梯向上，说明趋势健康向上。',
+      '均线空头': '短周期均线在中/长周期均线之下，排列像阶梯向下，说明趋势走弱。',
+      '量价背离': '价格上涨但成交量减少（假涨），或价格下跌但成交量放大（有人在悄悄买入）。',
+      '布林带上轨': '价格正常波动范围的上限，冲出上轨=可能过热。',
+      '布林带下轨': '价格正常波动范围的下限，跌破下轨=可能低估或即将反弹。',
+      '止损价': '保命线！到了就卖不要扛。止损=当前价-2×ATR，根据波动率自动调整。',
+      '仓位': '投入资金占总资金的比例。系统建议的仓位是基于1/4 Kelly公式计算的。',
+    };
+
+    function addTermTip(text) {
+      // 为已知术语添加悬浮提示
+      let result = text;
+      for (const [term, tip] of Object.entries(TERM_DICT)) {
+        if (result.includes(term)) {
+          result = result.replace(term,
+            `<span class="term-tip">${term}<span class="tip-content">${tip}</span></span>`
+          );
+        }
+      }
+      return result;
+    }
+
+    function setPeriod(btn) {
+      document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentPeriod = btn.dataset.period;
+    }
+
+    // ====== 大盘环境 ======
+    async function loadMarketRegime() {
+      try {
+        const resp = await fetch('/api/market_regime');
+        const data = await resp.json();
+        const badgeEl = document.getElementById('market-badge-container');
+        const regime = data.regime || 'unknown';
+        const desc = data.desc || '';
+        let cls = 'market-unknown';
+        if (regime === 'bull') cls = 'market-bull';
+        else if (regime === 'bear') cls = 'market-bear';
+        else if (regime === 'range') cls = 'market-range';
+        badgeEl.innerHTML = `<span class="market-badge ${cls}">${desc}</span>`;
+      } catch(e) { }
+    }
+
+    loadMarketRegime();
+    loadWatchlist();
+
+    // ====== 自选股管理 ======
+    function toggleWatchlist() {
+      document.getElementById('wl-sidebar').classList.toggle('open');
+      document.getElementById('wl-overlay').classList.toggle('visible');
+    }
+
+    async function loadWatchlist() {
+      try {
+        const resp = await fetch('/api/watchlist');
+        const items = await resp.json();
+        const container = document.getElementById('watchlist-items');
+        const countEl = document.getElementById('wl-count');
+
+        if (!items || items.length === 0) {
+          container.innerHTML = '<div class="wl-empty">暂无自选股<br>分析后点击"添加当前"</div>';
+          countEl.textContent = '';
+          document.getElementById('wl-count-badge').textContent = '';
+          return;
+        }
+
+        countEl.textContent = `(${items.length})`;
+        document.getElementById('wl-count-badge').textContent = `(${items.length})`;
+
+        let html = '';
+        for (const item of items) {
+          const score = item.overall_score;
+          let scoreClass = 'wl-score-none', scoreText = '--';
+          if (score !== null && score !== undefined) {
+            scoreText = Math.round(score);
+            if (score >= 60) scoreClass = 'wl-score-high';
+            else if (score >= 40) scoreClass = 'wl-score-mid';
+            else scoreClass = 'wl-score-low';
+          }
+
+          const isActive = item.stock_code === currentStockCode ? 'active' : '';
+          const name = item.stock_name || item.stock_code;
+
+          html += `
+            <div class="watchlist-item ${isActive}" onclick="analyzeFromWatchlist('${item.stock_code}')">
+              <div class="wl-info">
+                <div class="wl-name">${name}</div>
+                <div class="wl-code">${item.stock_code}</div>
+              </div>
+              <span class="wl-score ${scoreClass}">${scoreText}</span>
+              <button class="wl-delete" onclick="removeFromWatchlist(event, '${item.stock_code}')">&times;</button>
+            </div>`;
+        }
+        container.innerHTML = html;
+      } catch(e) { console.error('加载自选股失败', e); }
+    }
+
+    async function addCurrentToWatchlist() {
+      const code = document.getElementById('stock-code').value.trim();
+      if (!code) { alert('请先输入股票代码'); return; }
+      if (code.length !== 6 || !/^\d+$/.test(code)) { alert('股票代码应为6位数字'); return; }
+
+      try {
+        const resp = await fetch('/api/watchlist', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({code: code})
+        });
+        const data = await resp.json();
+        if (data.error) { alert(data.error); return; }
+        await loadWatchlist();
+      } catch(e) { alert('添加失败: ' + e.message); }
+    }
+
+    async function removeFromWatchlist(event, code) {
+      event.stopPropagation();
+      if (!confirm(`确定移除 ${code} 吗？`)) return;
+      try {
+        await fetch(`/api/watchlist?code=${code}`, {method: 'DELETE'});
+        await loadWatchlist();
+      } catch(e) { alert('删除失败: ' + e.message); }
+    }
+
+    function analyzeFromWatchlist(code) {
+      document.getElementById('stock-code').value = code;
+      toggleWatchlist(); // 收起抽屉
+      doAnalyze();
+    }
+
+    // ====== P0-2: 每日自选股扫描 ======
+    async function doDailyScan() {
+      const overlay = document.getElementById('loading-overlay');
+      const loadingText = document.getElementById('loading-text');
+      overlay.classList.add('visible');
+      loadingText.textContent = '正在扫描全部自选股...';
+      document.getElementById('scan-btn').disabled = true;
+
+      try {
+        const resp = await fetch('/api/daily_scan');
+        const briefing = await resp.json();
+
+        if (briefing.error) {
+          alert(briefing.error);
+          return;
+        }
+
+        renderBriefing(briefing);
+        await loadWatchlist(); // 刷新评分
+      } catch(e) {
+        alert('扫描失败: ' + e.message);
+      } finally {
+        overlay.classList.remove('visible');
+        document.getElementById('scan-btn').disabled = false;
+        loadingText.textContent = '正在获取数据并分析...';
+      }
+    }
+
+    function renderBriefing(briefing) {
+      const modal = document.getElementById('briefing-modal');
+      let html = `
+        <div class="bm-title">📊 每日投资简报</div>
+        <div class="bm-date">${briefing.date}</div>
+        <div class="bm-regime">
+          大盘环境: <span class="market-badge market-${briefing.regime}">${briefing.regime_desc}</span>
+          · 自选股平均评分: <strong>${briefing.avg_score}</strong>/100
+        </div>
+      `;
+
+      if (briefing.buy_list && briefing.buy_list.length > 0) {
+        html += `<div class="briefing-section"><div class="bs-title bs-buy-title">📈 值得关注（建议买入/小仓买入）</div>`;
+        for (const item of briefing.buy_list) {
+          html += `
+            <div class="briefing-item" onclick="analyzeFromBriefing('${item.stock_code}')">
+              <span class="bi-score score-high">${Math.round(item.overall_score)}</span>
+              <span class="bi-name">${item.stock_name}</span>
+              <span class="bi-rec">${item.recommendation}</span>
+              <span class="bi-risk">风险${item.risk_level}·仓位${item.position_pct}%</span>
+            </div>`;
+        }
+        html += '</div>';
+      }
+
+      if (briefing.hold_list && briefing.hold_list.length > 0) {
+        html += `<div class="briefing-section"><div class="bs-title bs-hold-title">⏸️ 观望等待</div>`;
+        for (const item of briefing.hold_list) {
+          html += `
+            <div class="briefing-item" onclick="analyzeFromBriefing('${item.stock_code}')">
+              <span class="bi-score score-mid">${Math.round(item.overall_score)}</span>
+              <span class="bi-name">${item.stock_name}</span>
+              <span class="bi-rec">${item.recommendation}</span>
+              <span class="bi-risk">风险${item.risk_level}</span>
+            </div>`;
+        }
+        html += '</div>';
+      }
+
+      if (briefing.sell_list && briefing.sell_list.length > 0) {
+        html += `<div class="briefing-section"><div class="bs-title bs-sell-title">⚠️ 需警惕（建议减仓/卖出）</div>`;
+        for (const item of briefing.sell_list) {
+          html += `
+            <div class="briefing-item" onclick="analyzeFromBriefing('${item.stock_code}')">
+              <span class="bi-score score-low">${Math.round(item.overall_score)}</span>
+              <span class="bi-name">${item.stock_name}</span>
+              <span class="bi-rec">${item.recommendation}</span>
+              <span class="bi-risk">风险${item.risk_level}·止损${item.stop_loss}</span>
+            </div>`;
+        }
+        html += '</div>';
+      }
+
+      if (briefing.error_list && briefing.error_list.length > 0) {
+        html += `<div class="briefing-section"><div class="bs-title" style="color:var(--text-muted);">❌ 分析失败</div>`;
+        for (const item of briefing.error_list) {
+          html += `<div class="briefing-item"><span class="bi-name">${item.stock_name}(${item.stock_code})</span><span class="bi-risk">${item.error}</span></div>`;
+        }
+        html += '</div>';
+      }
+
+      html += `<div class="briefing-close"><button onclick="closeBriefing()">关闭简报</button></div>`;
+      modal.innerHTML = html;
+      document.getElementById('briefing-overlay').classList.add('visible');
+    }
+
+    function analyzeFromBriefing(code) {
+      closeBriefing();
+      document.getElementById('stock-code').value = code;
+      doAnalyze();
+    }
+
+    function closeBriefing() {
+      document.getElementById('briefing-overlay').classList.remove('visible');
+    }
+
+    // ====== P2-2: 组合仪表盘 ======
+    async function showDashboard() {
+      try {
+        const resp = await fetch('/api/portfolio_dashboard');
+        const data = await resp.json();
+        if (data.error) { alert(data.error); return; }
+        renderDashboard(data);
+      } catch(e) { alert('仪表盘加载失败: ' + e.message); }
+    }
+
+    function renderDashboard(data) {
+      const modal = document.getElementById('dashboard-modal');
+      let signalBarHTML = '';
+      const total = data.total_stocks || 1;
+      const buyW = (data.signal_distribution.buy / total * 100) || 0;
+      const holdW = (data.signal_distribution.hold / total * 100) || 0;
+      const sellW = (data.signal_distribution.sell / total * 100) || 0;
+
+      let html = `
+        <div class="dm-title">📋 自选股组合仪表盘</div>
+        <div class="dm-stats">
+          <div class="dm-stat-item">
+            <div class="dm-label">自选股数量</div>
+            <div class="dm-value">${data.total_stocks}</div>
+          </div>
+          <div class="dm-stat-item">
+            <div class="dm-label">平均评分</div>
+            <div class="dm-value" style="color:${data.avg_score >= 60 ? 'var(--red-up)' : data.avg_score >= 40 ? 'var(--yellow)' : 'var(--green-down)'}">${data.avg_score}</div>
+          </div>
+          <div class="dm-stat-item">
+            <div class="dm-label">组合风险等级</div>
+            <div class="dm-value" style="color:${data.portfolio_risk === '高' ? 'var(--red-up)' : data.portfolio_risk === '低' ? 'var(--green-down)' : 'var(--yellow)'}">${data.portfolio_risk}</div>
+          </div>
+          <div class="dm-stat-item">
+            <div class="dm-label">评分标签</div>
+            <div class="dm-value" style="font-size:16px;">${data.score_label}</div>
+          </div>
+        </div>
+
+        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">信号分布: 买入${data.signal_distribution.buy} · 观望${data.signal_distribution.hold} · 卖出${data.signal_distribution.sell}</div>
+        <div class="dm-signal-bar">
+          <div class="dm-signal-buy" style="width:${buyW}%"></div>
+          <div class="dm-signal-hold" style="width:${holdW}%"></div>
+          <div class="dm-signal-sell" style="width:${sellW}%"></div>
+        </div>
+
+        ${data.concentration_warning ? `<div class="dm-concentration">${data.concentration_warning}</div>` : ''}
+
+        <div class="dm-industries">板块分布: ${Object.entries(data.industries).map(([k,v]) => `${k}:${v}只`).join(' · ')}</div>
+
+        <div class="dm-stock-list">
+          <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">各股详情</div>
+          ${data.stock_details.map(s => `
+            <div class="dm-stock-item">
+              <span class="dms-name">${s.name}</span>
+              <span class="dms-score" style="color:${s.score >= 60 ? 'var(--red-up)' : s.score >= 40 ? 'var(--yellow)' : 'var(--green-down)'}">${Math.round(s.score)}</span>
+              <span class="dms-action">${s.action === 'strong_buy' ? '强买入' : s.action === 'buy' ? '买入' : s.action === 'sell' ? '卖出' : s.action === 'strong_sell' ? '强卖出' : '观望'}</span>
+              <span class="dms-risk">风险${s.risk}</span>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="dashboard-close"><button onclick="closeDashboard()">关闭仪表盘</button></div>
+      `;
+      modal.innerHTML = html;
+      document.getElementById('dashboard-overlay').classList.add('visible');
+    }
+
+    function closeDashboard() {
+      document.getElementById('dashboard-overlay').classList.remove('visible');
+    }
+
+    // ====== 核心分析 ======
+    async function doAnalyze() {
+      const code = document.getElementById('stock-code').value.trim();
+      if (!code) { alert('请输入股票代码'); return; }
+
+      currentStockCode = code;
+      const overlay = document.getElementById('loading-overlay');
+      overlay.classList.add('visible');
+      document.getElementById('analyze-btn').disabled = true;
+
+      try {
+        const resp = await fetch(`/api/analyze?code=${code}&period=${currentPeriod}`);
+        const data = await resp.json();
+
+        if (data.error) {
+          document.getElementById('error-area').innerHTML = `<div class="error-msg">${data.error}</div>`;
+          document.getElementById('result-area').classList.remove('visible');
+          return;
+        }
+
+        document.getElementById('error-area').innerHTML = '';
+        document.getElementById('result-area').classList.add('visible');
+        renderResult(data);
+        loadWatchlist();
+        loadSignalHistory(code); // P1: 加载信号趋势
+      } catch(e) {
+        document.getElementById('error-area').innerHTML = `<div class="error-msg">请求失败: ${e.message}</div>`;
+      } finally {
+        overlay.classList.remove('visible');
+        document.getElementById('analyze-btn').disabled = false;
+      }
+    }
+
+    function getScoreClass(score) {
+      if (score >= 60) return 'score-high';
+      if (score >= 40) return 'score-mid';
+      return 'score-low';
+    }
+
+    function getFillClass(score) {
+      if (score >= 60) return 'fill-high';
+      if (score >= 40) return 'fill-mid';
+      return 'fill-low';
+    }
+
+    function getSignalClass(action) {
+      const map = {
+        'strong_buy': 'signal-strong-buy', 'buy': 'signal-buy',
+        'hold': 'signal-hold', 'sell': 'signal-sell', 'strong_sell': 'signal-strong-sell',
+      };
+      return map[action] || 'signal-hold';
+    }
+
+    // ====== 渲染结果 ======
+    function renderResult(data) {
+      // P0-1: 大白话总结
+      const summary = data.summary || {};
+      let summaryHTML = `
+        <div class="summary-title">💡 大白话解读</div>
+        <div class="summary-section summary-situation">
+          <div class="sec-label">📊 现在什么情况</div>
+          <div class="sec-text">${addTermTip(summary.situation || '分析中...')}</div>
+        </div>
+        <div class="summary-section summary-action">
+          <div class="sec-label">💡 应该怎么做</div>
+          <div class="sec-text">${addTermTip(summary.action || '观望')}</div>
+        </div>
+        <div class="summary-section summary-plan">
+          <div class="sec-label">⚠️ 什么时候改变计划</div>
+          <div class="sec-text">${addTermTip(summary.plan || '设定止损')}</div>
+        </div>
+      `;
+      document.getElementById('summary-card').innerHTML = summaryHTML;
+
+      // 综合建议卡
+      const priceChange = data.change_pct;
+      const isUp = typeof priceChange === 'number' && priceChange > 0;
+      const priceColor = isUp ? 'up' : 'down';
+
+      let recHTML = `
+        <div class="stock-info">
+          <div class="name">${data.stock_name} (${data.stock_code})</div>
+          <div class="price ${priceColor}">${data.current_price}</div>
+          <div class="change" style="color:${isUp ? 'var(--red-up)' : 'var(--green-down)'}">
+            涨跌幅: ${data.change_pct}%
+          </div>
+        </div>
+        <div class="recommendation-main">
+          <div class="recommendation-text">
+            ${data.recommendation}
+            <span class="signal-badge ${getSignalClass(data.action_type)}">${data.signal_strength}信号</span>
+            ${data.trend_veto ? '<span class="veto-badge">趋势否决</span>' : ''}
+          </div>
+          <div class="overall-score">
+            综合评分: <strong style="color:${isUp ? 'var(--red-up)' : 'var(--green-down)'}">${data.overall_score}</strong>/100
+            · ${data.overall_label}
+            · 市场环境: <span class="market-badge market-${data.market_regime}">${data.market_regime_desc || data.market_regime}</span>
+          </div>
+        </div>
+      `;
+      document.getElementById('recommendation-card').innerHTML = recHTML;
+
+      // P2-1: 场景推演
+      const scenarios = data.scenarios || {};
+      const opt = scenarios.optimistic || {};
+      const neut = scenarios.neutral || {};
+      const pess = scenarios.pessimistic || {};
+
+      let scenarioHTML = `
+        <div class="scenario-title">🔮 场景推演（${scenarios.timeframe || '5-10个交易日'}）</div>
+        <div class="scenario-grid">
+          <div class="scenario-item scenario-optimistic">
+            <div class="scenario-label">乐观场景 📈</div>
+            <div class="scenario-change">${opt.change_pct || '+8%'}</div>
+            <div class="scenario-price">目标价: ¥${opt.target_price || '-'}</div>
+            <div class="scenario-prob">概率: ${opt.probability || '30%'}</div>
+            <div class="scenario-condition">${addTermTip(opt.condition || '趋势持续加强')}</div>
+          </div>
+          <div class="scenario-item scenario-neutral">
+            <div class="scenario-label">中性场景 ⏸️</div>
+            <div class="scenario-change">${neut.change_pct || '+2%'}</div>
+            <div class="scenario-price">目标价: ¥${neut.target_price || '-'}</div>
+            <div class="scenario-prob">概率: ${neut.probability || '50%'}</div>
+            <div class="scenario-condition">${addTermTip(neut.condition || '震荡小幅上行')}</div>
+          </div>
+          <div class="scenario-item scenario-pessimistic">
+            <div class="scenario-label">悲观场景 📉</div>
+            <div class="scenario-change">${pess.change_pct || '-5%'}</div>
+            <div class="scenario-price">目标价: ¥${pess.target_price || '-'}</div>
+            <div class="scenario-prob">概率: ${pess.probability || '20%'}</div>
+            <div class="scenario-condition">${addTermTip(pess.condition || '趋势走弱')}</div>
+          </div>
+        </div>
+        <div class="scenario-note">基于历史波动率和当前评分推演，仅供参考。当前价: ¥${scenarios.current_price || '-'}</div>
+      `;
+      document.getElementById('scenario-card').innerHTML = scenarioHTML;
+
+      // 因子评分卡片（加名词提示）
+      const factorNames = {
+        'trend_momentum': '趋势动量 (MACD+ADX)',
+        'volatility': '波动率 (BOLL+ATR)',
+        'volume_flow': '量价关系 (OBV+MFI)',
+        'relative_strength': '相对强度 (RSI+ROC)',
+        'fundamentals': '基本面 (PE+PB+ROE)',
+      };
+
+      let factorsHTML = '';
+      for (const [factor, score] of Object.entries(data.scores)) {
+        const label = data.score_labels[factor];
+        const details = data.details[factor] || [];
+        const detailItems = details.map(d => `<li>${addTermTip(d)}</li>`).join('');
+
+        factorsHTML += `
+          <div class="factor-card">
+            <div class="factor-header">
+              <span class="factor-name">${factorNames[factor] || factor}</span>
+              <span class="factor-score ${getScoreClass(score)}">${score}</span>
+            </div>
+            <span class="factor-label">${label} · 权重${((data.weights[factor] || 0) * 100).toFixed(0)}%</span>
+            <div class="progress-bar">
+              <div class="progress-fill ${getFillClass(score)}" style="width:${score}%"></div>
+            </div>
+            <div class="detail-list"><ul>${detailItems}</ul></div>
+          </div>`;
+      }
+      document.getElementById('factors-grid').innerHTML = factorsHTML;
+
+      // 风险管理（加名词提示）
+      const risk = data.risk_management || {};
+      const riskLevel = risk.risk_level || '中';
+      const riskColor = riskLevel === '高' ? 'risk-high' : riskLevel === '低' ? 'risk-low' : 'risk-medium';
+
+      let riskHTML = `
+        <div class="risk-title">风险管理 · 风险等级: <span class="${riskColor}">${riskLevel}</span></div>
+        <div class="risk-grid">
+          <div class="risk-item">
+            <div class="risk-label">${addTermTip('止损价')}</div>
+            <div class="risk-value">${risk.stop_loss || 'N/A'} (${risk.stop_loss_pct || 'N/A'}%)</div>
+          </div>
+          <div class="risk-item">
+            <div class="risk-label">止盈目标</div>
+            <div class="risk-value">${risk.target_profit || 'N/A'} (${risk.target_profit_pct || 'N/A'}%)</div>
+          </div>
+          <div class="risk-item">
+            <div class="risk-label">${addTermTip('R/R比')}</div>
+            <div class="risk-value">${risk.rr_ratio || 'N/A'}</div>
+          </div>
+          <div class="risk-item">
+            <div class="risk-label">${addTermTip('仓位')}</div>
+            <div class="risk-value">${risk.position_pct || '0'}%</div>
+          </div>
+          <div class="risk-item">
+            <div class="risk-label">近期最大回撤</div>
+            <div class="risk-value">${risk.max_drawdown_recent || 'N/A'}%</div>
+          </div>
+          <div class="risk-item">
+            <div class="risk-label">${addTermTip('ATR')}(波动率)</div>
+            <div class="risk-value">${risk.atr || 'N/A'} (${risk.volatility_pct || 'N/A'}%)</div>
+          </div>
+        </div>
+      `;
+      document.getElementById('risk-panel').innerHTML = riskHTML;
+
+      // 回测结果
+      const bt = data.backtest || {};
+      let btHTML = `
+        <div class="bt-title">回测验证 · 模型版本: ${bt.model_version || 'v2'}</div>
+        <div class="bt-grid">
+          <div class="bt-item"><div class="bt-label">回测区间</div><div class="bt-value">${bt.start_date || '-'} ~ ${bt.end_date || '-'}</div></div>
+          <div class="bt-item"><div class="bt-label">总信号数</div><div class="bt-value">${bt.total_signals || 0}</div></div>
+          <div class="bt-item"><div class="bt-label">买入胜率</div><div class="bt-value">${bt.win_rate || 0}%</div></div>
+          <div class="bt-item"><div class="bt-label">平均收益</div><div class="bt-value">${bt.avg_return || 0}%</div></div>
+          <div class="bt-item"><div class="bt-label">最大回撤</div><div class="bt-value">${bt.max_drawdown || 0}%</div></div>
+          <div class="bt-item"><div class="bt-label">${addTermTip('Sharpe比率')}</div><div class="bt-value">${bt.sharpe_ratio || 0}</div></div>
+          <div class="bt-item"><div class="bt-label">盈亏因子</div><div class="bt-value">${bt.profit_factor || 0}</div></div>
+        </div>
+        ${bt.note ? `<div style="margin-top:12px;font-size:12px;color:var(--text-muted);">${bt.note}</div>` : ''}
+      `;
+      document.getElementById('backtest-panel').innerHTML = btHTML;
+
+      // 基本面
+      const fundData = data.spot_data || {};
+      let fundHTML = '';
+      for (const [k, v] of Object.entries(fundData)) {
+        fundHTML += `<div class="fund-item"><div class="fund-label">${addTermTip(k)}</div><div class="fund-value">${v}</div></div>`;
+      }
+      document.getElementById('fundamentals-bar').innerHTML = fundHTML;
+
+      // 权重说明
+      const weights = data.weights || {};
+      let wtHTML = `<div class="wt-title">当前因子权重 (基于${data.market_regime || '默认'}环境动态调整)</div>`;
+      for (const [f, w] of Object.entries(weights)) {
+        wtHTML += `${factorNames[f] || f}: ${w*100}% · `;
+      }
+      document.getElementById('weights-section').innerHTML = wtHTML;
+
+      // 渲染ECharts图表
+      renderCharts(data.chart_data, data.scores);
+    }
+
+    // ====== P1-1: 信号趋势图 ======
+    async function loadSignalHistory(code) {
+      try {
+        const resp = await fetch(`/api/history?code=${code}&limit=7`);
+        const records = await resp.json();
+
+        const card = document.getElementById('signal-history-card');
+
+        if (!records || records.length < 2) {
+          card.innerHTML = `
+            <div class="sh-title">📊 信号变化追踪</div>
+            <div style="font-size:13px;color:var(--text-muted);">历史记录不足(需要至少2次分析)，后续分析后自动生成趋势图</div>
+          `;
+          return;
+        }
+
+        // 计算趋势方向
+        const latestScore = records[0].overall_score;
+        const prevScore = records[1].overall_score;
+        let trendIcon = '→', trendColor = 'var(--text-muted)', trendText = '持平';
+        if (latestScore > prevScore + 3) { trendIcon = '↑'; trendColor = 'var(--red-up)'; trendText = '改善'; }
+        else if (latestScore < prevScore - 3) { trendIcon = '↓'; trendColor = 'var(--green-down)'; trendText = '恶化'; }
+
+        card.innerHTML = `
+          <div class="sh-title">📊 信号变化追踪 · 最近趋势: <span style="color:${trendColor}">${trendIcon} ${trendText}</span></div>
+          <div id="signal-history-chart"></div>
+        `;
+
+        const dates = records.map(r => r.created_at.slice(5, 10)).reverse(); // MM-DD
+        const scores = records.map(r => r.overall_score).reverse();
+        const actions = records.map(r => r.action_type).reverse();
+
+        // 动作颜色映射
+        const actionColors = actions.map(a => {
+          if (a === 'strong_buy' || a === 'buy') return '#e74c3c';
+          if (a === 'sell' || a === 'strong_sell') return '#2ecc71';
+          return '#f1c40f';
+        });
+
+        const histChart = echarts.init(document.getElementById('signal-history-chart'), 'dark');
+        charts.signalHistory = histChart;
+
+        histChart.setOption({
+          animation: false,
+          tooltip: { trigger: 'axis' },
+          grid: { left: 40, right: 20, top: 20, bottom: 20 },
+          xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 11, color: '#a0a0b0' } },
+          yAxis: { min: 0, max: 100, splitLine: { lineStyle: { color: '#2a2a4a' } }, axisLabel: { fontSize: 10, color: '#a0a0b0' } },
+          series: [{
+            type: 'line',
+            data: scores.map((s, i) => ({ value: s, itemStyle: { color: actionColors[i] } })),
+            smooth: true,
+            lineStyle: { width: 2, color: '#00bcd4' },
+            itemStyle: { color: '#00bcd4' },
+            markLine: {
+              silent: true,
+              lineStyle: { color: '#606070', type: 'dashed', width: 1 },
+              data: [{ yAxis: 60, label: { formatter: '买入线', fontSize: 10, color: '#e74c3c' } },
+                     { yAxis: 30, label: { formatter: '否决线', fontSize: 10, color: '#2ecc71' } }]
+            }
+          }]
+        });
+      } catch(e) {
+        console.error('信号历史加载失败', e);
+      }
+    }
+
+    // ====== ECharts图表 ======
+    function renderCharts(chartData, scores) {
+      if (!chartData) return;
+
+      const dates = chartData.dates || [];
+      const klineData = chartData.kline || [];
+
+      // K线主图
+      const klineChart = echarts.init(document.getElementById('kline-chart'), 'dark');
+      charts.kline = klineChart;
+
+      klineChart.setOption({
+        animation: false,
+        tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+        legend: { data: ['K线', 'MA5', 'MA10', 'MA20', 'MA60', 'BOLL上', 'BOLL中', 'BOLL下'], top: 0, textStyle: { fontSize: 11, color: '#a0a0b0' } },
+        grid: { left: 60, right: 20, top: 30, bottom: 20 },
+        xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10, color: '#606070' } },
+        yAxis: { scale: true, splitLine: { lineStyle: { color: '#2a2a4a' } }, axisLabel: { fontSize: 10, color: '#606070' } },
+        series: [
+          { name: 'K线', type: 'candlestick', data: klineData, itemStyle: { color: '#e74c3c', color0: '#2ecc71', borderColor: '#e74c3c', borderColor0: '#2ecc71' } },
+          { name: 'MA5', type: 'line', data: chartData.ma5, smooth: true, lineStyle: { width: 1 }, symbol: 'none', itemStyle: { color: '#f1c40f' } },
+          { name: 'MA10', type: 'line', data: chartData.ma10, smooth: true, lineStyle: { width: 1 }, symbol: 'none', itemStyle: { color: '#3498db' } },
+          { name: 'MA20', type: 'line', data: chartData.ma20, smooth: true, lineStyle: { width: 1 }, symbol: 'none', itemStyle: { color: '#e67e22' } },
+          { name: 'MA60', type: 'line', data: chartData.ma60, smooth: true, lineStyle: { width: 1 }, symbol: 'none', itemStyle: { color: '#9b59b6' } },
+          { name: 'BOLL上', type: 'line', data: chartData.boll_upper, lineStyle: { width: 1, type: 'dashed' }, symbol: 'none', itemStyle: { color: '#606070' } },
+          { name: 'BOLL中', type: 'line', data: chartData.boll_mid, lineStyle: { width: 1, type: 'dashed' }, symbol: 'none', itemStyle: { color: '#606070' } },
+          { name: 'BOLL下', type: 'line', data: chartData.boll_lower, lineStyle: { width: 1, type: 'dashed' }, symbol: 'none', itemStyle: { color: '#606070' } },
+        ]
+      });
+
+      // 成交量
+      const volumeChart = echarts.init(document.getElementById('volume-chart'), 'dark');
+      charts.volume = volumeChart;
+      const volColors = klineData.map(d => d[1] >= d[0] ? '#e74c3c' : '#2ecc71');
+
+      volumeChart.setOption({
+        animation: false,
+        tooltip: { trigger: 'axis' },
+        grid: { left: 60, right: 20, top: 10, bottom: 20 },
+        xAxis: { type: 'category', data: dates, axisLabel: { show: false } },
+        yAxis: { splitLine: { lineStyle: { color: '#2a2a4a' } }, axisLabel: { fontSize: 10, color: '#606070' } },
+        series: [{ type: 'bar', data: chartData.volumes.map((v, i) => ({ value: v, itemStyle: { color: volColors[i] } })), barWidth: '60%' }]
+      });
+
+      // MACD
+      const macdChart = echarts.init(document.getElementById('macd-chart'), 'dark');
+      charts.macd = macdChart;
+      const macdBarColors = (chartData.macd || []).map(v => v === null ? '#606070' : v >= 0 ? '#e74c3c' : '#2ecc71');
+
+      macdChart.setOption({
+        animation: false,
+        tooltip: { trigger: 'axis' },
+        legend: { data: ['DIF', 'DEA', 'MACD'], top: 0, textStyle: { fontSize: 11, color: '#a0a0b0' } },
+        grid: { left: 60, right: 20, top: 30, bottom: 20 },
+        xAxis: { type: 'category', data: dates, axisLabel: { show: false } },
+        yAxis: { splitLine: { lineStyle: { color: '#2a2a4a' } }, axisLabel: { fontSize: 10, color: '#606070' } },
+        series: [
+          { name: 'DIF', type: 'line', data: chartData.dif, symbol: 'none', lineStyle: { width: 1 }, itemStyle: { color: '#f1c40f' } },
+          { name: 'DEA', type: 'line', data: chartData.dea, symbol: 'none', lineStyle: { width: 1 }, itemStyle: { color: '#3498db' } },
+          { name: 'MACD', type: 'bar', data: chartData.macd.map((v, i) => ({ value: v, itemStyle: { color: macdBarColors[i] } })), barWidth: '60%' },
+        ]
+      });
+
+      // RSI + ADX
+      const rsiChart = echarts.init(document.getElementById('rsi-chart'), 'dark');
+      charts.rsi = rsiChart;
+
+      rsiChart.setOption({
+        animation: false,
+        tooltip: { trigger: 'axis' },
+        legend: { data: ['RSI', 'ADX'], top: 0, textStyle: { fontSize: 11, color: '#a0a0b0' } },
+        grid: { left: 60, right: 20, top: 30, bottom: 20 },
+        xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10, color: '#606070' } },
+        yAxis: [
+          { min: 0, max: 100, splitLine: { lineStyle: { color: '#2a2a4a' } }, axisLabel: { fontSize: 10, color: '#606070' } },
+          { min: 0, max: 60, splitLine: { show: false }, axisLabel: { fontSize: 10, color: '#9b59b6' } },
+        ],
+        series: [
+          { name: 'RSI', type: 'line', data: chartData.rsi, yAxisIndex: 0, symbol: 'none', lineStyle: { width: 1.5 }, itemStyle: { color: '#e67e22' },
+            markLine: { silent: true, lineStyle: { color: '#606070', type: 'dashed', width: 1 }, data: [{ yAxis: 30 }, { yAxis: 70 }] }
+          },
+          { name: 'ADX', type: 'line', data: chartData.adx, yAxisIndex: 1, symbol: 'none', lineStyle: { width: 1 }, itemStyle: { color: '#9b59b6' } },
+        ]
+      });
+
+      // 雷达图
+      const radarChart = echarts.init(document.getElementById('radar-chart'), 'dark');
+      charts.radar = radarChart;
+
+      radarChart.setOption({
+        animation: false,
+        radar: {
+          indicator: [
+            { name: '趋势动量', max: 100 }, { name: '波动率', max: 100 },
+            { name: '量价关系', max: 100 }, { name: '相对强度', max: 100 },
+            { name: '基本面', max: 100 },
+          ],
+          axisName: { color: '#a0a0b0', fontSize: 11 },
+          splitArea: { areaStyle: { color: ['rgba(10,50,100,0.2)', 'rgba(10,50,100,0.1)'] } },
+          splitLine: { lineStyle: { color: '#2a2a4a' } },
+          axisLine: { lineStyle: { color: '#2a2a4a' } },
+        },
+        series: [{
+          type: 'radar',
+          data: [{
+            value: [scores.trend_momentum || 0, scores.volatility || 0, scores.volume_flow || 0, scores.relative_strength || 0, scores.fundamentals || 0],
+            name: '因子评分',
+            areaStyle: { color: 'rgba(0,188,212,0.2)' },
+            lineStyle: { color: '#00bcd4', width: 2 },
+            itemStyle: { color: '#00bcd4' },
+          }]
+        }]
+      });
+
+      window.addEventListener('resize', () => { Object.values(charts).forEach(c => c.resize()); });
+    }
+  </script>
+</body>
+</html>
