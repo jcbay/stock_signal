@@ -19,10 +19,21 @@ if [ -f "$PID_FILE" ]; then
     rm -f "$PID_FILE"
 fi
 
-# 检查 venv
+# 自动创建 venv（如果不存在）
 if [ ! -f "$PYTHON" ]; then
-    echo "❌ 找不到 venv，请先创建: python3 -m venv venv && source venv/bin/activate && pip install flask pandas numpy scipy"
-    exit 1
+    echo "📦 首次运行，正在创建虚拟环境..."
+    python3 -m venv venv
+    if [ ! -f "$PYTHON" ]; then
+        echo "❌ 创建 venv 失败，请检查 python3 是否已安装"
+        exit 1
+    fi
+    echo "📥 正在安装依赖..."
+    "$DIR/venv/bin/pip" install -r requirements.txt -q
+    if [ $? -ne 0 ]; then
+        echo "❌ 依赖安装失败，请手动执行: venv/bin/pip install -r requirements.txt"
+        exit 1
+    fi
+    echo "✅ 环境准备完成"
 fi
 
 # 启动服务
