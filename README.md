@@ -56,22 +56,24 @@ stock_signal/
 ├── db.py               # SQLite 数据层
 ├── templates/
 │   └── index.html      # 前端单页（ECharts图表 + 交互）
-├── start.sh            # 启动脚本
+├── start.sh            # 启动脚本（自动创建venv并安装依赖）
 ├── stop.sh             # 停止脚本
+├── requirements.txt    # Python依赖
 ├── .gitignore
 └── README.md
 ```
 
 ## 🚀 快速开始
 
-### 环境准备
-
 ```bash
+git clone https://github.com/jcbay/stock_signal.git
 cd stock_signal
-python3 -m venv venv
-source venv/bin/activate
-pip install flask pandas numpy scipy
+./start.sh
 ```
+
+首次运行会自动创建虚拟环境并安装依赖，之后直接访问 http://localhost:8080
+
+停止服务：`./stop.sh`
 
 ### 启动
 
