@@ -1736,7 +1736,7 @@
           indicator: [
             { name: '趋势动量', max: 100 }, { name: '波动率', max: 100 },
             { name: '量价关系', max: 100 }, { name: '相对强度', max: 100 },
-            { name: data.is_etf ? '流动性' : '基本面', max: 100 },
+            { name: scores.etf_liquidity !== undefined ? '流动性' : '基本面', max: 100 },
           ],
           axisName: { color: '#a0a0b0', fontSize: 11 },
           splitArea: { areaStyle: { color: ['rgba(10,50,100,0.2)', 'rgba(10,50,100,0.1)'] } },
