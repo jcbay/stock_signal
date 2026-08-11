@@ -15,8 +15,11 @@ import pandas as pd
 from datetime import datetime
 
 
+from data_fetcher import is_etf
+
+
 # ============================================================
-# 因子权重配置（基准权重，市场环境会动态调整）
+# 因子权重配置（个股 — 基准权重，市场环境会动态调整）
 # ============================================================
 
 BASE_WEIGHTS = {
@@ -27,7 +30,7 @@ BASE_WEIGHTS = {
     "fundamentals": 0.30,      # 基本面 (PE + PB + ROE)
 }
 
-# 市场环境动态权重调整
+# 市场环境动态权重调整 (个股)
 REGIME_WEIGHT_ADJUSTMENTS = {
     "bull": {     # 牛市: 强化趋势和动量，弱化震荡指标
         "trend_momentum": +0.10,
@@ -51,6 +54,44 @@ REGIME_WEIGHT_ADJUSTMENTS = {
         "fundamentals": -0.05,
     },
     "unknown": {},  # 未知: 用基准权重
+}
+
+# ============================================================
+# ETF因子权重配置
+# ============================================================
+
+ETF_BASE_WEIGHTS = {
+    "trend_momentum": 0.25,     # 趋势动量
+    "volatility": 0.15,         # 波动率
+    "volume_flow": 0.20,        # 量价关系 (权重提升，资金流对ETF更重要)
+    "relative_strength": 0.20,  # 相对强度 (权重提升，无基本面时动量更重要)
+    "etf_liquidity": 0.20,       # ETF流动性+资金面 (替代基本面)
+}
+
+# ETF市场环境动态权重调整
+ETF_REGIME_WEIGHT_ADJUSTMENTS = {
+    "bull": {
+        "trend_momentum": +0.10,
+        "volatility": -0.05,
+        "volume_flow": +0.05,
+        "relative_strength": -0.05,
+        "etf_liquidity": -0.05,
+    },
+    "bear": {
+        "trend_momentum": -0.10,
+        "volatility": +0.05,
+        "volume_flow": -0.05,
+        "relative_strength": +0.05,
+        "etf_liquidity": +0.05,
+    },
+    "range": {
+        "trend_momentum": -0.05,
+        "volatility": +0.05,
+        "volume_flow": +0.05,
+        "relative_strength": +0.10,
+        "etf_liquidity": -0.05,
+    },
+    "unknown": {},
 }
 
 # 一票否决阈值（趋势动量低于此值直接否决）
@@ -101,13 +142,28 @@ def detect_market_regime(index_df):
 
 
 def get_adjusted_weights(regime):
-    """根据市场环境动态调整因子权重"""
+    """根据市场环境动态调整因子权重 (个股)"""
     adjustments = REGIME_WEIGHT_ADJUSTMENTS.get(regime, {})
     weights = {}
     for factor, base_weight in BASE_WEIGHTS.items():
         weights[factor] = base_weight + adjustments.get(factor, 0)
 
     # 确保权重总和为1.0
+    total = sum(weights.values())
+    if total != 1.0:
+        for k in weights:
+            weights[k] /= total
+
+    return weights
+
+
+def get_etf_adjusted_weights(regime):
+    """根据市场环境动态调整ETF因子权重"""
+    adjustments = ETF_REGIME_WEIGHT_ADJUSTMENTS.get(regime, {})
+    weights = {}
+    for factor, base_weight in ETF_BASE_WEIGHTS.items():
+        weights[factor] = base_weight + adjustments.get(factor, 0)
+
     total = sum(weights.values())
     if total != 1.0:
         for k in weights:
@@ -342,8 +398,17 @@ def run_backtest(df, spot_data, model_version="v2_orthogonal"):
 # ============================================================
 
 def calc_overall_score(scores, regime="unknown"):
-    """计算加权综合评分（动态权重）"""
+    """计算加权综合评分（个股，动态权重）"""
     weights = get_adjusted_weights(regime)
+    total = 0
+    for factor, weight in weights.items():
+        total += scores[factor] * weight
+    return round(total, 1), weights
+
+
+def calc_etf_overall_score(scores, regime="unknown"):
+    """计算ETF加权综合评分（ETF动态权重）"""
+    weights = get_etf_adjusted_weights(regime)
     total = 0
     for factor, weight in weights.items():
         total += scores[factor] * weight
@@ -699,6 +764,214 @@ def build_report(analysis_result, stock_code, stock_name, spot_data,
         "spot_data": {
             "市盈率-动态": spot_data.get("市盈率-动态", "N/A"),
             "市净率": spot_data.get("市净率", "N/A"),
+            "换手率": spot_data.get("换手率", "N/A"),
+            "成交额": spot_data.get("成交额", "N/A"),
+            "总市值": spot_data.get("总市值", "N/A"),
+        },
+    }
+
+    return report
+
+
+# ============================================================
+# ETF专属: 大白话总结 + 报告构建
+# ============================================================
+
+def generate_etf_summary(scores, overall_score, recommendation, action_type,
+                         trend_veto, regime, regime_desc, risk_mgmt, details,
+                         etf_name, etf_code, current_price, change_pct, key_data):
+    """生成ETF大白话总结 — 流动性替代基本面描述"""
+
+    is_up = isinstance(change_pct, (int, float)) and change_pct > 0
+
+    # --- 第一段: 现在什么情况 ---
+    situation_parts = []
+
+    # 趋势状况
+    trend_score = scores.get("trend_momentum", 50)
+    trend_details = details.get("trend_momentum", [])
+    if trend_veto:
+        if trend_score < 15:
+            situation_parts.append(f"这只ETF的趋势严重走弱(评分仅{trend_score:.0f}分)，价格持续下跌")
+        else:
+            situation_parts.append(f"这只ETF的趋势方向不明确(趋势评分{trend_score:.0f}分)，还在犹豫没有走出方向")
+    elif trend_score >= 65:
+        situation_parts.append(f"这只ETF趋势走强(评分{trend_score:.0f}分)，价格方向明确向上")
+    elif trend_score >= 40:
+        situation_parts.append(f"这只ETF趋势中等(评分{trend_score:.0f}分)，有一定方向但不够强劲")
+    else:
+        situation_parts.append(f"这只ETF趋势偏弱(评分{trend_score:.0f}分)，方向不够明确")
+
+    # 大盘环境
+    regime_text = {"bull": "大盘处于牛市环境，整体市场情绪乐观", "bear": "大盘处于熊市环境，整体市场偏弱需谨慎",
+                   "range": "大盘处于震荡状态，方向不明需耐心等待", "unknown": "大盘环境不明"}
+    situation_parts.append(regime_text.get(regime, regime_text["unknown"]))
+
+    # 量价关系
+    vol_score = scores.get("volume_flow", 50)
+    vol_details = details.get("volume_flow", [])
+    for d in vol_details:
+        if "价涨量缩" in d or "量价背离" in d:
+            situation_parts.append("量价出现背离(价格上涨但成交量减少)，可能是假涨，资金在悄悄撤出")
+            break
+        elif "价跌量增" in d:
+            situation_parts.append("虽然价格下跌，但成交量放大，可能有资金在低位悄悄买入")
+            break
+
+    # 流动性+资金面
+    liq_score = scores.get("etf_liquidity", 50)
+    liq_details = details.get("etf_liquidity", [])
+    if liq_score >= 65:
+        situation_parts.append(f"资金面活跃(评分{liq_score:.0f}分)，成交量放大有资金在流入")
+    elif liq_score >= 40:
+        situation_parts.append(f"资金面平稳(评分{liq_score:.0f}分)，成交量正常无明显异动")
+    else:
+        situation_parts.append(f"资金面偏冷(评分{liq_score:.0f}分)，成交量萎缩资金在观望")
+
+    situation = "；".join(situation_parts) + "。"
+
+    # --- 第二段: 应该怎么做 ---
+    action_parts = []
+
+    if trend_veto and trend_score < 15:
+        action_parts.append("建议不要买入，如果已持有应考虑减仓止损")
+    elif trend_veto:
+        action_parts.append("建议观望不动，不要急着入场")
+    elif action_type == "strong_buy":
+        action_parts.append("可以考虑买入，趋势和资金面都在支持上涨")
+    elif action_type == "buy":
+        action_parts.append("可以小仓位试探买入，先少量试试不要一把梭")
+    elif action_type == "hold":
+        if overall_score >= 45:
+            action_parts.append("信号不够明确，建议观望为主耐心等待")
+        else:
+            action_parts.append("信号偏弱，不建议加仓，已有仓位注意风险控制")
+    elif action_type == "sell":
+        action_parts.append("考虑减仓或卖出部分，锁定已有利润")
+    elif action_type == "strong_sell":
+        action_parts.append("建议尽快卖出，多个信号都在看空")
+
+    pos_pct = risk_mgmt.get("position_pct", 0) if risk_mgmt else 0
+    if pos_pct > 0 and not trend_veto:
+        action_parts.append(f"建议仓位约{pos_pct:.0f}%，不要超出这个比例")
+
+    action = "；".join(action_parts) + "。"
+
+    # --- 第三段: 什么时候改变计划 ---
+    plan_parts = []
+
+    stop_loss = risk_mgmt.get("stop_loss", "N/A") if risk_mgmt else "N/A"
+    stop_pct = risk_mgmt.get("stop_loss_pct", "N/A") if risk_mgmt else "N/A"
+    target = risk_mgmt.get("target_profit", "N/A") if risk_mgmt else "N/A"
+    rr = risk_mgmt.get("rr_ratio", 0) if risk_mgmt else 0
+
+    if stop_loss != "N/A":
+        plan_parts.append(f"止损价设为{stop_loss}元(约{stop_pct}%下方空间)，到了就卖不要扛")
+
+    if target != "N/A":
+        plan_parts.append(f"止盈目标约{target}元")
+
+    if rr > 0:
+        if rr >= 2:
+            plan_parts.append(f"风险回报比{rr:.1f}:1，风险可控值得尝试")
+        elif rr >= 1.5:
+            plan_parts.append(f"风险回报比{rr:.1f}:1，勉强可以尝试但要注意止损")
+        else:
+            plan_parts.append(f"风险回报比{rr:.1f}:1偏低，风险大于收益，需格外谨慎")
+
+    risk_level = risk_mgmt.get("risk_level", "中") if risk_mgmt else "中"
+    plan_parts.append(f"整体风险等级: {risk_level}")
+
+    if action_type in ("buy", "strong_buy") and not trend_veto:
+        plan_parts.append("如果后续趋势继续加强且资金持续流入，可以逐步加仓；如果趋势走弱或资金大幅流出，立即减仓")
+    elif action_type == "hold":
+        plan_parts.append("等综合评分突破60再考虑入场，低于30则考虑卖出")
+
+    plan = "；".join(plan_parts) + "。"
+
+    return {
+        "situation": situation,
+        "action": action,
+        "plan": plan,
+        "full_summary": f"📊 **当前情况**：{situation}\n\n💡 **操作建议**：{action}\n\n⚠️ **风控计划**：{plan}",
+    }
+
+
+def build_etf_report(analysis_result, etf_code, etf_name, spot_data,
+                     hist_df=None, index_df=None):
+    """构建ETF专属分析报告"""
+    scores = {
+        "trend_momentum": analysis_result["trend_momentum"]["score"],
+        "volatility": analysis_result["volatility"]["score"],
+        "volume_flow": analysis_result["volume_flow"]["score"],
+        "relative_strength": analysis_result["relative_strength"]["score"],
+        "etf_liquidity": analysis_result["etf_liquidity"]["score"],
+    }
+
+    # 市场环境检测
+    regime, regime_desc = detect_market_regime(index_df)
+
+    # ETF动态加权综合评分
+    overall, weights = calc_etf_overall_score(scores, regime)
+    trend_score = scores["trend_momentum"]
+
+    recommendation, signal_strength, action_type = get_recommendation(overall, trend_score, regime)
+
+    # 风险管理 (ETF也用ATR止损，但仓位上限更高一些因为ETF本身分散度高)
+    risk_data = calc_risk_management(hist_df, spot_data, overall) if hist_df is not None else {}
+    # ETF仓位上限放宽到60%（ETF天然分散）
+    if risk_data and risk_data.get("position_pct", 0) > 60:
+        risk_data["position_pct"] = 60.0
+
+    # 回测
+    backtest_result = run_backtest(hist_df, spot_data, model_version="v2_etf") if hist_df is not None and len(hist_df) >= 80 else {
+        "total_signals": 0, "note": "数据不足，无法回测"
+    }
+
+    report = {
+        "stock_code": etf_code,
+        "stock_name": etf_name,
+        "is_etf": True,
+        "current_price": spot_data.get("最新价", "N/A"),
+        "change_pct": spot_data.get("涨跌幅", "N/A"),
+        "scores": scores,
+        "score_labels": {dim: score_to_label(s) for dim, s in scores.items()},
+        "overall_score": overall,
+        "overall_label": score_to_label(overall),
+        "recommendation": recommendation,
+        "signal_strength": signal_strength,
+        "action_type": action_type,
+        "trend_veto": bool(trend_score < TREND_VETO_THRESHOLD),
+        "weights": weights,
+        "market_regime": regime,
+        "market_regime_desc": regime_desc,
+        "risk_management": risk_data,
+        "backtest": backtest_result,
+        "summary": generate_etf_summary(
+            scores, overall, recommendation, action_type,
+            bool(trend_score < TREND_VETO_THRESHOLD), regime, regime_desc,
+            risk_data,
+            {
+                "trend_momentum": analysis_result["trend_momentum"]["details"],
+                "volatility": analysis_result["volatility"]["details"],
+                "volume_flow": analysis_result["volume_flow"]["details"],
+                "relative_strength": analysis_result["relative_strength"]["details"],
+                "etf_liquidity": analysis_result["etf_liquidity"]["details"],
+            },
+            etf_name, etf_code,
+            spot_data.get("最新价", "N/A"), spot_data.get("涨跌幅", "N/A"),
+            analysis_result["key_data"],
+        ),
+        "scenarios": generate_scenarios(hist_df, spot_data, overall, risk_data, scores),
+        "details": {
+            "trend_momentum": analysis_result["trend_momentum"]["details"],
+            "volatility": analysis_result["volatility"]["details"],
+            "volume_flow": analysis_result["volume_flow"]["details"],
+            "relative_strength": analysis_result["relative_strength"]["details"],
+            "etf_liquidity": analysis_result["etf_liquidity"]["details"],
+        },
+        "key_data": analysis_result["key_data"],
+        "spot_data": {
             "换手率": spot_data.get("换手率", "N/A"),
             "成交额": spot_data.get("成交额", "N/A"),
             "总市值": spot_data.get("总市值", "N/A"),

@@ -706,7 +706,149 @@ def score_fundamentals(spot_data, hist_df=None):
 
 
 # ============================================================
-# 综合分析入口
+# ETF专属因子: 流动性+资金面 (替代基本面因子)
+# ============================================================
+
+def score_etf_liquidity(df, spot_data=None):
+    """ETF因子: 流动性 + 资金面
+
+    ETF没有PE/PB/ROE，改用流动性指标衡量资金活跃度:
+    1. 成交量趋势 (近5日均量 vs 近20日均量)
+    2. 换手率/成交量百分位
+    3. 成交额相对水平
+    4. OBV与均线偏离 (资金净累积程度)
+    """
+    details = []
+    sub_scores = []
+
+    latest = df.iloc[-1]
+
+    # 1. 成交量趋势 — 近期资金活跃度
+    if len(df) >= 60:
+        vol_5 = df["成交量"].iloc[-5:].mean()
+        vol_20 = df["成交量"].iloc[-20:].mean()
+        vol_60 = df["成交量"].iloc[-60:].mean()
+
+        vol_ratio_5_20 = vol_5 / vol_20 if vol_20 > 0 else 1
+        vol_ratio_20_60 = vol_20 / vol_60 if vol_60 > 0 else 1
+
+        # 放量=资金活跃=高分; 缩量=资金观望=低分
+        liq_score = 50 + (vol_ratio_5_20 - 1) * 40 + (vol_ratio_20_60 - 1) * 20
+        liq_score = np.clip(liq_score, 0, 100)
+        sub_scores.append(liq_score)
+
+        if vol_ratio_5_20 > 1.3:
+            details.append(f"近5日均量是20日均量的{vol_ratio_5_20:.2f}倍，资金明显活跃")
+        elif vol_ratio_5_20 < 0.7:
+            details.append(f"近5日均量仅为20日均量的{vol_ratio_5_20:.2f}倍，资金趋于谨慎")
+        else:
+            details.append(f"成交量平稳，5日/20日均量比={vol_ratio_5_20:.2f}")
+    elif len(df) >= 20:
+        vol_5 = df["成交量"].iloc[-5:].mean()
+        vol_20 = df["成交量"].iloc[-20:].mean()
+        vol_ratio = vol_5 / vol_20 if vol_20 > 0 else 1
+        liq_score = np.clip(50 + (vol_ratio - 1) * 40, 0, 100)
+        sub_scores.append(liq_score)
+        details.append(f"成交量比(5日/20日)={vol_ratio:.2f}")
+    else:
+        sub_scores.append(50)
+        details.append("成交量趋势数据不足")
+
+    # 2. 换手率或成交量百分位
+    turnover = spot_data.get("换手率", 0) if spot_data else 0
+    if turnover > 0:
+        # 换手率: 0.5%-5% → score 30-85; 极高换手率(>10%)可能过热略减
+        if turnover > 10:
+            turnover_score = np.clip(85 - (turnover - 10) * 3, 50, 100)
+            details.append(f"换手率={turnover:.2f}% (异常活跃，注意过热风险)")
+        else:
+            turnover_score = np.clip(30 + (turnover - 0.5) / (5 - 0.5) * 55, 0, 85)
+            details.append(f"换手率={turnover:.2f}%")
+        sub_scores.append(turnover_score)
+    else:
+        # 换手率不可用时用成交量百分位替代
+        vol_rank = percentile_rank(df["成交量"].dropna(), window=min(60, len(df)))
+        sub_scores.append(vol_rank)
+        details.append(f"换手率不可用，成交量百分位={vol_rank:.0f}")
+
+    # 3. 成交额相对水平
+    if "成交额" in df.columns and len(df) >= 20:
+        amount_rank = percentile_rank(df["成交额"].dropna(), window=min(60, len(df)))
+        sub_scores.append(amount_rank)
+        details.append(f"成交额百分位={amount_rank:.0f}%")
+    else:
+        sub_scores.append(50)
+        details.append("成交额数据不足")
+
+    # 4. OBV与均线偏离 — 资金净累积程度
+    if "obv" in df.columns and len(df) >= 20:
+        obv = df["obv"]
+        obv_ma20 = obv.rolling(20).mean()
+        if not pd.isna(obv_ma20.iloc[-1]) and abs(obv_ma20.iloc[-1]) > 0:
+            obv_deviation = (obv.iloc[-1] - obv_ma20.iloc[-1]) / abs(obv_ma20.iloc[-1]) * 100
+            # OBV高于均线=资金净流入=高分
+            obv_score = np.clip(50 + obv_deviation * 0.5, 0, 100)
+            sub_scores.append(obv_score)
+            details.append(f"OBV偏离20日均线{obv_deviation:+.1f}%")
+        else:
+            sub_scores.append(50)
+            details.append("OBV均线数据不足")
+    else:
+        sub_scores.append(50)
+        details.append("OBV数据不足")
+
+    # 加权: 成交量趋势35%, 换手率20%, 成交额15%, OBV偏离30%
+    weights = [0.35, 0.20, 0.15, 0.30]
+    total = sum(s * w for s, w in zip(sub_scores, weights))
+    total = np.clip(total, 0, 100)
+
+    return round(total, 1), details
+
+
+# ============================================================
+# ETF综合分析入口
+# ============================================================
+
+def analyze_etf(df, spot_data):
+    """ETF专属5因子分析 (流动性替代基本面)
+
+    因子构成:
+    1. 趋势动量 (MACD + ADX + MA + SAR)
+    2. 波动率 (BOLL + ATR)
+    3. 量价关系 (OBV + MFI) — 权重提升
+    4. 相对强度 (RSI + ROC) — 权重提升
+    5. ETF流动性+资金面 (成交量趋势 + 换手率 + 成交额 + OBV偏离)
+    """
+    df = calc_all_indicators(df)
+
+    trend_score, trend_details = score_trend_momentum(df)
+    volatility_score, volatility_details = score_volatility(df)
+    volume_score, volume_details = score_volume_flow(df)
+    rsi_score, rsi_details = score_relative_strength(df)
+    liquidity_score, liquidity_details = score_etf_liquidity(df, spot_data)
+
+    # 收集关键数据点
+    latest = df.iloc[-1]
+    key_data = {}
+    for field in ["收盘", "ma5", "ma10", "ma20", "ma60", "dif", "dea", "macd",
+                   "rsi", "adx", "atr", "obv", "mfi", "boll_upper", "boll_mid",
+                   "boll_lower", "boll_width", "vwap", "sar", "plus_di", "minus_di",
+                   "成交量"]:
+        if field in df.columns and not pd.isna(latest[field]):
+            key_data[field] = round(float(latest[field]), 4)
+
+    return {
+        "trend_momentum": {"score": trend_score, "details": trend_details},
+        "volatility": {"score": volatility_score, "details": volatility_details},
+        "volume_flow": {"score": volume_score, "details": volume_details},
+        "relative_strength": {"score": rsi_score, "details": rsi_details},
+        "etf_liquidity": {"score": liquidity_score, "details": liquidity_details},
+        "key_data": key_data,
+    }
+
+
+# ============================================================
+# 综合分析入口（个股）
 # ============================================================
 
 def analyze_all(df, spot_data):

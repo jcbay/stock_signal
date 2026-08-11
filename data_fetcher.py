@@ -17,9 +17,24 @@ from datetime import datetime, timedelta
 from db import cache_kline, load_kline, kline_cache_age, cache_fundamentals, load_fundamentals
 
 
+def is_etf(stock_code):
+    """判断是否为ETF/LOF基金
+
+    上海ETF: 510xxx-518xxx, 588xxx, 562xxx-563xxx
+    深圳ETF: 159xxx
+    LOF: 501xxx(上海), 161xxx-167xxx(深圳)
+    """
+    prefixes = ("51", "56", "58", "50", "15", "16")
+    return stock_code.startswith(prefixes)
+
+
 def get_symbol_prefix(stock_code):
-    """根据股票代码判断市场前缀"""
-    if stock_code.startswith("6"):
+    """根据代码判断市场前缀
+
+    上海(sh): 6开头(主板), 5开头(ETF/基金), 9开头(B股)
+    深圳(sz): 0开头(主板), 3开头(创业板), 1开头(基金/ETF), 2开头(B股)
+    """
+    if stock_code.startswith(("6", "5", "9")):
         return "sh"
     else:
         return "sz"
@@ -27,7 +42,7 @@ def get_symbol_prefix(stock_code):
 
 def get_market_id(stock_code):
     """市场ID: 上海=1, 深圳=0"""
-    return 1 if stock_code.startswith("6") else 0
+    return 1 if stock_code.startswith(("6", "5", "9")) else 0
 
 
 def curl_get(url, timeout=20, encoding="utf-8", extra_headers=None):
@@ -266,6 +281,9 @@ def fetch_spot_data(stock_code):
         "总市值": safe_float(45),  # 亿
         "市净率": safe_float(49),
     }
+
+    # ETF标记: 没有PE/PB概念
+    spot_dict["is_etf"] = is_etf(stock_code)
 
     # 计算涨跌幅 (精确)
     if spot_dict["昨收"] > 0 and spot_dict["最新价"] > 0:

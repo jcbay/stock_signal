@@ -9,9 +9,9 @@ import json
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template, Response
 
-from data_fetcher import fetch_stock_data, fetch_hist_data, fetch_index_data
-from indicators import analyze_all, calc_all_indicators
-from scorer import build_report, detect_market_regime, run_backtest, score_to_label
+from data_fetcher import fetch_stock_data, fetch_hist_data, fetch_index_data, is_etf
+from indicators import analyze_all, analyze_etf, calc_all_indicators
+from scorer import build_report, build_etf_report, detect_market_regime, run_backtest, score_to_label
 from db import (save_score_history, save_backtest_result, load_backtest_result,
                 load_score_history, add_watchlist, remove_watchlist, list_watchlist,
                 get_conn)
@@ -75,12 +75,16 @@ def analyze():
         if index_df is not None and len(index_df) >= 30:
             index_df = calc_all_indicators(index_df)
 
-        # 执行5正交因子分析
-        analysis_result = analyze_all(hist_df, spot_dict)
-
-        # 构建评分报告 (含市场环境+风险管理+回测)
-        report = build_report(analysis_result, stock_code, stock_name, spot_dict,
-                              hist_df=hist_df, index_df=index_df)
+        # 根据ETF/个股路由不同分析路径
+        etf_flag = is_etf(stock_code)
+        if etf_flag:
+            analysis_result = analyze_etf(hist_df, spot_dict)
+            report = build_etf_report(analysis_result, stock_code, stock_name, spot_dict,
+                                      hist_df=hist_df, index_df=index_df)
+        else:
+            analysis_result = analyze_all(hist_df, spot_dict)
+            report = build_report(analysis_result, stock_code, stock_name, spot_dict,
+                                  hist_df=hist_df, index_df=index_df)
 
         # 格式化数值
         report["current_price"] = format_spot_value(report["current_price"])
@@ -259,9 +263,16 @@ def daily_scan():
             if index_df is not None and len(index_df) >= 30:
                 index_df = calc_all_indicators(index_df)
 
-            analysis_result = analyze_all(hist_df, spot_dict)
-            report = build_report(analysis_result, code, item.get("stock_name", stock_name),
-                                  spot_dict, hist_df=hist_df, index_df=index_df)
+            # ETF / 个股路由
+            etf_flag = is_etf(code)
+            if etf_flag:
+                analysis_result = analyze_etf(hist_df, spot_dict)
+                report = build_etf_report(analysis_result, code, item.get("stock_name", stock_name),
+                                          spot_dict, hist_df=hist_df, index_df=index_df)
+            else:
+                analysis_result = analyze_all(hist_df, spot_dict)
+                report = build_report(analysis_result, code, item.get("stock_name", stock_name),
+                                       spot_dict, hist_df=hist_df, index_df=index_df)
 
             # 保存评分记录
             save_score_history({
@@ -395,10 +406,12 @@ def portfolio_dashboard():
     else:
         portfolio_risk = "低"
 
-    # 行业分散度 (简化：基于代码前缀判断行业大类)
+    # 行业/类型分散度
     industry_map = {
         "60": "主板", "00": "深市主板", "30": "创业板",
-        "68": "科创板", "北": "北交所",
+        "68": "科创板",
+        "51": "ETF基金", "56": "ETF基金", "58": "ETF基金",
+        "50": "ETF基金", "15": "ETF基金", "16": "ETF基金",
     }
     industries = {}
     for item in items:

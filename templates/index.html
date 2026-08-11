@@ -1029,6 +1029,8 @@
       '均线空头': '短周期均线在中/长周期均线之下，排列像阶梯向下，说明趋势走弱。',
       '量价背离': '价格上涨但成交量减少（假涨），或价格下跌但成交量放大（有人在悄悄买入）。',
       '布林带上轨': '价格正常波动范围的上限，冲出上轨=可能过热。',
+      'ETF流动性': 'ETF的成交活跃度。高流动性=买卖方便、价差小；低流动性=成交困难、价差大。',
+      '换手率': '当日成交量占流通份额的比例。高换手率=交易活跃，但也可能过热。',
       '布林带下轨': '价格正常波动范围的下限，跌破下轨=可能低估或即将反弹。',
       '止损价': '保命线！到了就卖不要扛。止损=当前价-2×ATR，根据波动率自动调整。',
       '仓位': '投入资金占总资金的比例。系统建议的仓位是基于1/4 Kelly公式计算的。',
@@ -1475,6 +1477,7 @@
         'volume_flow': '量价关系 (OBV+MFI)',
         'relative_strength': '相对强度 (RSI+ROC)',
         'fundamentals': '基本面 (PE+PB+ROE)',
+        'etf_liquidity': '流动性+资金面 (成交量+换手率)',
       };
 
       let factorsHTML = '';
@@ -1733,7 +1736,7 @@
           indicator: [
             { name: '趋势动量', max: 100 }, { name: '波动率', max: 100 },
             { name: '量价关系', max: 100 }, { name: '相对强度', max: 100 },
-            { name: '基本面', max: 100 },
+            { name: data.is_etf ? '流动性' : '基本面', max: 100 },
           ],
           axisName: { color: '#a0a0b0', fontSize: 11 },
           splitArea: { areaStyle: { color: ['rgba(10,50,100,0.2)', 'rgba(10,50,100,0.1)'] } },
@@ -1743,7 +1746,7 @@
         series: [{
           type: 'radar',
           data: [{
-            value: [scores.trend_momentum || 0, scores.volatility || 0, scores.volume_flow || 0, scores.relative_strength || 0, scores.fundamentals || 0],
+            value: [scores.trend_momentum || 0, scores.volatility || 0, scores.volume_flow || 0, scores.relative_strength || 0, scores.fundamentals || scores.etf_liquidity || 0],
             name: '因子评分',
             areaStyle: { color: 'rgba(0,188,212,0.2)' },
             lineStyle: { color: '#00bcd4', width: 2 },
