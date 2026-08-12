@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>股票信号分析系统 v3</title>
+  <title>股票信号分析系统 v4.1</title>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   <style>
     :root {
@@ -154,105 +154,273 @@
     .content-area { flex: 1; min-width: 0; }
 
     header {
-      text-align: center;
-      padding: 20px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 0;
       border-bottom: 1px solid var(--border);
-      margin-bottom: 20px;
+      margin-bottom: 24px;
     }
 
-    header h1 { font-size: 22px; color: var(--cyan); font-weight: 500; }
-    header .subtitle { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
-
-    .search-bar {
+    .header-left h1 {
+      font-size: 24px;
+      color: var(--cyan);
+      font-weight: 600;
+      margin-bottom: 4px;
       display: flex;
-      justify-content: center;
       align-items: center;
       gap: 10px;
-      padding: 16px;
-      background: var(--bg-secondary);
-      border-radius: 12px;
-      margin-bottom: 20px;
     }
 
-    .search-bar input {
-      width: 200px;
-      padding: 10px 14px;
+    .header-left h1 .version-tag {
+      font-size: 12px;
+      padding: 2px 8px;
+      background: rgba(0,188,212,0.15);
+      color: var(--cyan);
+      border-radius: 4px;
+      font-weight: 400;
+    }
+
+    .header-left .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      letter-spacing: 0.3px;
+    }
+
+    .header-right {
+      text-align: right;
+    }
+
+    .header-right .date-text {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      font-family: 'SF Mono', Menlo, Monaco, monospace;
+    }
+
+    .header-right .market-badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* ============================================== */
+    /* 工具栏 - 分组布局                              */
+    /* ============================================== */
+    .toolbar {
+      background: var(--bg-secondary);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 20px;
+      border: 1px solid var(--border);
+    }
+
+    .toolbar-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-row + .toolbar-row {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border);
+    }
+
+    .toolbar-row.right {
+      justify-content: flex-end;
+    }
+
+    .toolbar-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-right: 4px;
+      min-width: 56px;
+    }
+
+    .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-card);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .icon-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+
+    .icon-btn .badge {
+      background: rgba(0,188,212,0.2);
+      color: var(--cyan);
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 8px;
+      font-weight: 600;
+    }
+
+    .stock-input {
+      flex: 1;
+      min-width: 220px;
+      padding: 10px 16px;
       border: 1px solid var(--border);
       border-radius: 8px;
       background: var(--bg-primary);
       color: var(--text-primary);
       font-size: 14px;
       outline: none;
+      transition: border-color 0.2s;
     }
 
-    .search-bar input:focus { border-color: var(--cyan); }
+    .stock-input:focus { border-color: var(--cyan); }
+
+    .stock-input::placeholder { color: var(--text-muted); }
+
+    .period-group {
+      display: inline-flex;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 2px;
+    }
 
     .period-btn {
-      padding: 8px 16px;
-      border: 1px solid var(--border);
+      padding: 7px 14px;
+      border: none;
       border-radius: 6px;
-      background: var(--bg-card);
+      background: transparent;
       color: var(--text-secondary);
       cursor: pointer;
       font-size: 13px;
+      transition: all 0.2s;
     }
 
-    .period-btn.active { background: var(--cyan); color: #fff; border-color: var(--cyan); }
+    .period-btn:hover { color: var(--cyan); }
 
-    .analyze-btn {
-      padding: 10px 24px;
+    .period-btn.active {
+      background: var(--cyan);
+      color: #fff;
+    }
+
+    .primary-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 22px;
       border: none;
       border-radius: 8px;
-      background: var(--cyan);
+      background: linear-gradient(135deg, var(--cyan), #0097a7);
       color: #fff;
       cursor: pointer;
       font-size: 14px;
       font-weight: 500;
+      box-shadow: 0 2px 8px rgba(0,188,212,0.3);
+      transition: transform 0.15s;
     }
 
-    .analyze-btn:hover { opacity: 0.9; }
-    .analyze-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .primary-btn:hover { transform: translateY(-1px); }
+    .primary-btn:active { transform: translateY(0); }
+    .primary-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .scan-btn {
-      padding: 10px 24px;
-      border: 1px solid var(--cyan);
+    .ghost-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 16px;
+      border: 1px solid var(--border);
       border-radius: 8px;
       background: transparent;
-      color: var(--cyan);
+      color: var(--text-secondary);
       cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
+      font-size: 13px;
+      text-decoration: none;
+      transition: all 0.2s;
+      white-space: nowrap;
     }
 
-    .scan-btn:hover { background: rgba(0,188,212,0.15); }
-    .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .ghost-btn:hover { border-color: var(--purple); color: var(--purple); }
+    .ghost-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .dashboard-btn {
-      padding: 10px 24px;
-      border: 1px solid var(--purple);
+    .accent-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 16px;
+      border: 1px solid var(--orange);
       border-radius: 8px;
-      background: transparent;
-      color: var(--purple);
+      background: rgba(230,126,34,0.08);
+      color: var(--orange);
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
+      text-decoration: none;
       font-weight: 500;
+      transition: all 0.2s;
+      white-space: nowrap;
     }
 
-    .dashboard-btn:hover { background: rgba(155,89,182,0.15); }
+    .accent-btn:hover { background: rgba(230,126,34,0.18); }
 
-    .market-badge {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 6px;
+    /* ============================================== */
+    /* 速览面板 - 新增                                */
+    /* ============================================== */
+    .overview-panel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .overview-card {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 16px 18px;
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .overview-card:hover { border-color: var(--cyan); }
+
+    .overview-card .oc-label {
       font-size: 12px;
-      font-weight: 500;
-      margin-left: 10px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
 
-    .market-bull { background: rgba(231,76,60,0.2); color: var(--red-up); border: 1px solid rgba(231,76,60,0.4); }
-    .market-bear { background: rgba(46,204,113,0.2); color: var(--green-down); border: 1px solid rgba(46,204,113,0.4); }
-    .market-range { background: rgba(241,196,15,0.2); color: var(--yellow); border: 1px solid rgba(241,196,15,0.4); }
-    .market-unknown { background: rgba(160,160,176,0.2); color: var(--text-secondary); border: 1px solid rgba(160,160,176,0.4); }
+    .overview-card .oc-value {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .overview-card .oc-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    .overview-card.up .oc-value { color: var(--red-up); }
+    .overview-card.down .oc-value { color: var(--green-down); }
+
+    .overview-card .oc-icon {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      font-size: 18px;
+      opacity: 0.4;
+    }
 
     .result-area { display: none; }
     .result-area.visible { display: block; }
@@ -878,27 +1046,209 @@
       border-top: 1px solid var(--border);
       margin-top: 20px;
     }
+
+    /* ============================================================
+       响应式适配 — 手机端 (max-width: 768px)
+       ============================================================ */
+    @media (max-width: 768px) {
+      .container { padding: 10px; }
+
+      /* 头部纵向堆叠 */
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      header .header-right {
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      header h1 { font-size: 18px; }
+      header .subtitle { font-size: 11px; }
+
+      /* 工具栏纵向堆叠 */
+      .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding: 10px;
+      }
+      .toolbar-group {
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .toolbar-group input[type="text"] {
+        width: 100%;
+        flex: 1 1 100%;
+      }
+      .period-btns { width: 100%; justify-content: center; }
+      .primary-btn, .ghost-btn, .accent-btn {
+        flex: 1;
+        text-align: center;
+        font-size: 13px;
+        padding: 8px 12px;
+      }
+
+      /* 速览面板强制1列 */
+      .overview-panel {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .overview-card {
+        padding: 10px;
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+      }
+      .overview-card .oc-icon { font-size: 20px; }
+      .overview-card .oc-value { font-size: 18px; }
+
+      /* 图表区域 */
+      #chart-container, .chart-box {
+        min-height: 300px;
+        overflow-x: auto;
+      }
+      .chart-container {
+        height: 300px !important;
+      }
+
+      /* 分析报告区 */
+      .report-grid {
+        grid-template-columns: 1fr;
+      }
+
+      /* 雷达/风险/场景等网格全改单列 */
+      .charts-row {
+        grid-template-columns: 1fr;
+      }
+
+      /* 表格横向滚动 */
+      .data-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .data-table-wrap table {
+        min-width: 600px;
+        font-size: 12px;
+      }
+
+      /* 弹窗全屏化 */
+      .modal {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        max-height: 90vh;
+        overflow-y: auto;
+        padding: 16px;
+      }
+
+      /* 浮动抽屉全屏 */
+      .watchlist-drawer {
+        width: 100vw !important;
+        max-width: 100vw !important;
+      }
+
+      /* 标签页/选项卡纵向 */
+      .tab-bar {
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .tab-btn {
+        flex: 1;
+        text-align: center;
+        font-size: 12px;
+        padding: 6px 8px;
+      }
+    }
+
+    /* 超小屏 (max-width: 480px) 进一步压缩 */
+    @media (max-width: 480px) {
+      .container { padding: 6px; }
+      header h1 { font-size: 16px; }
+      .overview-card .oc-value { font-size: 16px; }
+      .summary-bar {
+        grid-template-columns: 1fr 1fr;
+      }
+      .toolbar-group {
+        flex-direction: column;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>股票信号分析系统 v3</h1>
-      <div class="subtitle">正交因子 · 大白话解读 · 场景推演 · 信号追踪 · 名词百科 · 组合仪表盘</div>
+      <div class="header-left">
+        <h1>📈 股票信号分析系统<span class="version-tag">v4.1</span></h1>
+        <div class="subtitle">交易驱动持仓 · 日期格式统一 · 交易闭环 · 信号命中率 · 智能预警</div>
+      </div>
+      <div class="header-right">
+        <div class="date-text" id="date-text">--</div>
+        <span id="market-badge-container"></span>
+      </div>
     </header>
 
-    <div class="search-bar">
-      <button class="wl-toggle-btn" onclick="toggleWatchlist()">
-        <span>&#9776;</span> 自选股 <span id="wl-count-badge" style="font-size:11px;color:var(--text-muted);"></span>
-      </button>
-      <input type="text" id="stock-code" placeholder="输入A股代码，如 600519" maxlength="6" onkeypress="if(event.key==='Enter')doAnalyze()">
-      <button class="period-btn active" data-period="3m" onclick="setPeriod(this)">3个月</button>
-      <button class="period-btn" data-period="1m" onclick="setPeriod(this)">1个月</button>
-      <button class="period-btn" data-period="6m" onclick="setPeriod(this)">6个月</button>
-      <button class="analyze-btn" id="analyze-btn" onclick="doAnalyze()">分析</button>
-      <button class="scan-btn" id="scan-btn" onclick="doDailyScan()">扫描自选股</button>
-      <button class="dashboard-btn" onclick="showDashboard()">组合仪表盘</button>
-      <span id="market-badge-container"></span>
+    <!-- 工具栏 -->
+    <div class="toolbar">
+      <!-- 第一行：分析操作 -->
+      <div class="toolbar-row">
+        <span class="toolbar-label">分析</span>
+        <button class="icon-btn" onclick="toggleWatchlist()">
+          ≡ 自选股 <span class="badge" id="wl-count-badge">0</span>
+        </button>
+        <input type="text" class="stock-input" id="stock-code"
+               placeholder="输入 A 股代码，如 600519 / 562500"
+               maxlength="6"
+               onkeypress="if(event.key==='Enter')doAnalyze()">
+        <div class="period-group">
+          <button class="period-btn active" data-period="3m" onclick="setPeriod(this)">3月</button>
+          <button class="period-btn" data-period="1m" onclick="setPeriod(this)">1月</button>
+          <button class="period-btn" data-period="6m" onclick="setPeriod(this)">6月</button>
+        </div>
+        <button class="primary-btn" id="analyze-btn" onclick="doAnalyze()">▶ 分析</button>
+      </div>
+      <!-- 第二行：组合操作 -->
+      <div class="toolbar-row">
+        <span class="toolbar-label">组合</span>
+        <button class="ghost-btn" id="scan-btn" onclick="doDailyScan()">📊 扫描自选股</button>
+        <button class="ghost-btn" onclick="showDashboard()">📋 组合仪表盘</button>
+        <a href="/portfolio" class="accent-btn">💼 持仓管理</a>
+        <a href="/journal" class="ghost-btn">📝 交易日志</a>
+        <a href="/alerts" class="ghost-btn">🔔 预警中心</a>
+      </div>
+    </div>
+
+    <!-- 系统速览 -->
+    <div class="overview-panel" id="overview-panel">
+      <div class="overview-card">
+        <div class="oc-icon">⭐</div>
+        <div class="oc-label">自选股评分</div>
+        <div class="oc-value" id="ov-watchlist-score">--</div>
+        <div class="oc-sub" id="ov-watchlist-sub">加载中...</div>
+      </div>
+      <div class="overview-card">
+        <div class="oc-icon">💼</div>
+        <div class="oc-label">持仓总盈亏</div>
+        <div class="oc-value" id="ov-portfolio-pnl">--</div>
+        <div class="oc-sub" id="ov-portfolio-sub">加载中...</div>
+      </div>
+      <div class="overview-card">
+        <div class="oc-icon">📈</div>
+        <div class="oc-label">今日表现</div>
+        <div class="oc-value" id="ov-today-pnl">--</div>
+        <div class="oc-sub" id="ov-today-sub">加载中...</div>
+      </div>
+      <div class="overview-card">
+        <div class="oc-icon">🌐</div>
+        <div class="oc-label">市场环境</div>
+        <div class="oc-value" id="ov-market-regime">--</div>
+        <div class="oc-sub" id="ov-market-sub">加载中...</div>
+      </div>
+      <div class="overview-card">
+        <div class="oc-icon">🔔</div>
+        <div class="oc-label">预警状态</div>
+        <div class="oc-value" id="ov-alert-count">--</div>
+        <div class="oc-sub" id="ov-alert-sub">加载中...</div>
+      </div>
     </div>
 
     <div id="error-area"></div>
@@ -1055,24 +1405,141 @@
       currentPeriod = btn.dataset.period;
     }
 
-    // ====== 大盘环境 ======
+    // ====== 显示当前日期 ======
+    function renderDate() {
+      const now = new Date();
+      const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const wd = weekdays[now.getDay()];
+      document.getElementById('date-text').textContent = `${yyyy}-${mm}-${dd} ${wd}`;
+    }
+    renderDate();
+
+    // ====== 大盘环境 + 系统速览 ======
     async function loadMarketRegime() {
       try {
         const resp = await fetch('/api/market_regime');
         const data = await resp.json();
         const badgeEl = document.getElementById('market-badge-container');
         const regime = data.regime || 'unknown';
-        const desc = data.desc || '';
+        const desc = data.desc || '暂无数据';
         let cls = 'market-unknown';
         if (regime === 'bull') cls = 'market-bull';
         else if (regime === 'bear') cls = 'market-bear';
         else if (regime === 'range') cls = 'market-range';
         badgeEl.innerHTML = `<span class="market-badge ${cls}">${desc}</span>`;
+
+        // 填充速览面板的市场卡
+        const regimeMap = {
+          'bull': { text: '牛市 🔥', sub: '可积极布局', cls: 'up' },
+          'bear': { text: '熊市 ❄️', sub: '建议防御为主', cls: 'down' },
+          'range': { text: '震荡 ⏸', sub: '精选个股高抛低吸', cls: '' },
+          'unknown': { text: '未知', sub: '数据不足', cls: '' },
+        };
+        const r = regimeMap[regime] || regimeMap['unknown'];
+        const regimeEl = document.getElementById('ov-market-regime');
+        regimeEl.textContent = r.text;
+        regimeEl.style.color = r.cls === 'up' ? 'var(--red-up)' : r.cls === 'down' ? 'var(--green-down)' : 'var(--text-primary)';
+        document.getElementById('ov-market-sub').textContent = r.sub;
+      } catch(e) { }
+    }
+
+    // ====== 填充自选股评分卡 ======
+    async function loadWatchlistScore() {
+      try {
+        const resp = await fetch('/api/watchlist');
+        const items = await resp.json();
+        const scoreEl = document.getElementById('ov-watchlist-score');
+        const subEl = document.getElementById('ov-watchlist-sub');
+
+        if (!items || items.length === 0) {
+          scoreEl.textContent = '--';
+          scoreEl.style.color = 'var(--text-muted)';
+          subEl.textContent = '暂无自选股';
+          return;
+        }
+        const validScores = items.filter(i => i.overall_score !== null && i.overall_score !== undefined);
+        const buy = validScores.filter(i => i.overall_score >= 60).length;
+        const mid = validScores.filter(i => i.overall_score >= 40 && i.overall_score < 60).length;
+        const sell = validScores.filter(i => i.overall_score < 40).length;
+
+        if (validScores.length > 0) {
+          const avg = validScores.reduce((s, i) => s + i.overall_score, 0) / validScores.length;
+          scoreEl.textContent = avg.toFixed(1);
+          scoreEl.style.color = avg >= 60 ? 'var(--red-up)' : avg >= 40 ? 'var(--yellow)' : 'var(--green-down)';
+          subEl.textContent = `${items.length}只 · 买${buy} 观${mid} 卖${sell}`;
+        } else {
+          scoreEl.textContent = items.length;
+          scoreEl.style.color = 'var(--cyan)';
+          subEl.textContent = '只 · 尚未分析';
+        }
+      } catch(e) { }
+    }
+
+    // ====== 填充持仓速览卡 ======
+    async function loadPortfolioOverview() {
+      try {
+        const resp = await fetch('/api/portfolio/overview');
+        const data = await resp.json();
+        if (data.error || !data.total_count) {
+          document.getElementById('ov-portfolio-pnl').textContent = '--';
+          document.getElementById('ov-portfolio-pnl').style.color = 'var(--text-muted)';
+          document.getElementById('ov-portfolio-sub').textContent = '暂无持仓';
+          document.getElementById('ov-today-pnl').textContent = '--';
+          document.getElementById('ov-today-pnl').style.color = 'var(--text-muted)';
+          document.getElementById('ov-today-sub').textContent = '去添加你的持仓';
+          return;
+        }
+
+        const pnl = data.total_pnl || 0;
+        const pct = data.total_pnl_pct || 0;
+        const pnlEl = document.getElementById('ov-portfolio-pnl');
+        pnlEl.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+        pnlEl.style.color = pct > 0 ? 'var(--red-up)' : pct < 0 ? 'var(--green-down)' : 'var(--text-primary)';
+        document.getElementById('ov-portfolio-sub').textContent =
+          `${data.total_count}只 · ${(pnl >= 0 ? '+' : '') + pnl.toFixed(0)}元`;
+
+        const todayPnl = data.total_today_pnl || 0;
+        const todayPct = data.total_today_pct || 0;
+        const todayEl = document.getElementById('ov-today-pnl');
+        todayEl.textContent = (todayPct >= 0 ? '+' : '') + todayPct.toFixed(2) + '%';
+        todayEl.style.color = todayPct > 0 ? 'var(--red-up)' : todayPct < 0 ? 'var(--green-down)' : 'var(--text-primary)';
+        document.getElementById('ov-today-sub').textContent =
+          `${(todayPnl >= 0 ? '+' : '') + todayPnl.toFixed(0)}元`;
       } catch(e) { }
     }
 
     loadMarketRegime();
     loadWatchlist();
+    loadWatchlistScore();
+    loadPortfolioOverview();
+    loadAlertSummary();
+
+    // ====== 预警速览 ======
+    async function loadAlertSummary() {
+      try {
+        const resp = await fetch('/api/alerts/summary');
+        const data = await resp.json();
+        const el = document.getElementById('ov-alert-count');
+        const sub = document.getElementById('ov-alert-sub');
+        if (data.triggered_count > 0) {
+          el.textContent = data.triggered_count + '已触发';
+          el.style.color = 'var(--red-up)';
+          sub.textContent = `共${data.total_rules}条规则`;
+          sub.style.color = 'var(--red-up)';
+        } else if (data.active_count > 0) {
+          el.textContent = data.active_count + '活跃';
+          el.style.color = 'var(--cyan)';
+          sub.textContent = '运行正常';
+        } else {
+          el.textContent = '无预警';
+          el.style.color = 'var(--text-muted)';
+          sub.textContent = '点击预警中心设置';
+        }
+      } catch(e) { }
+    }
 
     // ====== 自选股管理 ======
     function toggleWatchlist() {
@@ -1095,7 +1562,7 @@
         }
 
         countEl.textContent = `(${items.length})`;
-        document.getElementById('wl-count-badge').textContent = `(${items.length})`;
+        document.getElementById('wl-count-badge').textContent = items.length;
 
         let html = '';
         for (const item of items) {

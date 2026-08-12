@@ -1,6 +1,7 @@
 """
-股票信号判断系统 v2 - Flask 后端
-正交因子模型 + 回测验证 + 市场环境感知 + 风险管理
+股票信号判断系统 v4.1 - Flask 后端
+正交因子模型 + 回测验证 + 市场环境感知 + 风险管理 + 交易闭环 + 智能预警
+v4.1: 持仓单向数据流(交易驱动) + 日期格式统一
 """
 
 import pandas as pd
@@ -9,12 +10,18 @@ import json
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template, Response
 
-from data_fetcher import fetch_stock_data, fetch_hist_data, fetch_index_data, is_etf
+from data_fetcher import fetch_stock_data, fetch_hist_data, fetch_index_data, is_etf, fetch_spot_data
 from indicators import analyze_all, analyze_etf, calc_all_indicators
 from scorer import build_report, build_etf_report, detect_market_regime, run_backtest, score_to_label
 from db import (save_score_history, save_backtest_result, load_backtest_result,
                 load_score_history, add_watchlist, remove_watchlist, list_watchlist,
-                get_conn)
+                get_conn,
+                list_holdings,
+                list_trade_journal, delete_trade_journal,
+                add_alert_rule, list_alert_rules, update_alert_status, delete_alert_rule)
+from portfolio import get_portfolio_overview
+from trade_journal import log_trade, get_trade_journal_summary, calc_signal_hit_rate
+from alert_checker import check_all_alerts, generate_alert_summary, get_alert_type_label
 
 class NumpyEncoder(json.JSONEncoder):
     """处理numpy类型的JSON编码器"""
@@ -489,6 +496,203 @@ def prepare_chart_data(df):
                 chart_data[field].append(None)
 
     return chart_data
+
+
+# ============================================================
+# 持仓管理路由
+# ============================================================
+
+@app.route("/portfolio")
+def portfolio_page():
+    """持仓管理独立页面"""
+    return render_template("portfolio.html")
+
+
+@app.route("/api/portfolio/overview")
+def portfolio_overview():
+    """获取持仓组合总览（实时行情+盈亏+建议）"""
+    try:
+        overview = get_portfolio_overview()
+        return Response(json.dumps(overview, cls=NumpyEncoder, ensure_ascii=False),
+                        mimetype='application/json')
+    except Exception as e:
+        return jsonify({"error": f"获取持仓总览失败: {str(e)}"}), 500
+
+
+@app.route("/api/portfolio/holdings", methods=["GET"])
+def holdings():
+    """持仓列表(只读) — 持仓只能通过交易记录创建和更新"""
+    items = list_holdings()
+    return Response(json.dumps(items, cls=NumpyEncoder, ensure_ascii=False),
+                    mimetype='application/json')
+
+
+# ============================================================
+# 交易日志路由
+# ============================================================
+
+@app.route("/journal")
+def journal_page():
+    """交易日志独立页面"""
+    return render_template("journal.html")
+
+
+@app.route("/api/trade_journal", methods=["GET", "POST", "DELETE"])
+def trade_journal_api():
+    """交易日志 CRUD"""
+    if request.method == "GET":
+        stock_code = request.args.get("code", "").strip()
+        if stock_code:
+            items = list_trade_journal(stock_code=stock_code, limit=200)
+        else:
+            items = list_trade_journal(limit=200)
+        return Response(json.dumps(items, cls=NumpyEncoder, ensure_ascii=False),
+                        mimetype='application/json')
+
+    elif request.method == "POST":
+        data = request.json if request.is_json else request.form
+        stock_code = (data.get("code") or data.get("stock_code") or "").strip()
+        action_type = (data.get("action_type") or "").strip()
+        quantity = data.get("quantity")
+        price = data.get("price")
+        reason = (data.get("reason") or "").strip()
+        follow_signal = data.get("follow_signal", True)
+        trade_date = (data.get("trade_date") or "").strip() or None
+
+        if not stock_code or len(stock_code) != 6 or not stock_code.isdigit():
+            return jsonify({"error": "股票代码应为6位数字"}), 400
+        if action_type not in ("buy", "sell"):
+            return jsonify({"error": "操作类型必须是 buy 或 sell"}), 400
+        if not quantity or int(quantity) <= 0:
+            return jsonify({"error": "数量必须大于0"}), 400
+        if not price or float(price) <= 0:
+            return jsonify({"error": "价格必须大于0"}), 400
+
+        # 获取股票名称
+        stock_name = ""
+        try:
+            spot = fetch_spot_data(stock_code)
+            stock_name = spot.get("名称", stock_code)
+        except Exception:
+            stock_name = stock_code
+
+        # log_trade 内部会自动同步更新持仓(单向: 交易 → 持仓)
+        result = log_trade(
+            stock_code, stock_name, action_type,
+            int(quantity), float(price),
+            reason=reason,
+            follow_signal=follow_signal,
+            trade_date=trade_date,
+        )
+        return jsonify(result)
+
+    elif request.method == "DELETE":
+        journal_id = request.args.get("id", "")
+        if not journal_id:
+            return jsonify({"error": "请提供日志ID"}), 400
+        delete_trade_journal(int(journal_id))
+        return jsonify({"ok": True})
+
+
+@app.route("/api/trade_journal/summary")
+def trade_journal_summary():
+    """交易日志汇总"""
+    summary = get_trade_journal_summary()
+    return Response(json.dumps(summary, cls=NumpyEncoder, ensure_ascii=False),
+                    mimetype='application/json')
+
+
+@app.route("/api/signal_hit_rate")
+def signal_hit_rate():
+    """信号命中率分析"""
+    days_back = int(request.args.get("days_back", "30"))
+    forward_days = int(request.args.get("forward_days", "5"))
+
+    result = calc_signal_hit_rate(days_back=days_back, forward_days=forward_days)
+    return Response(json.dumps(result, cls=NumpyEncoder, ensure_ascii=False),
+                    mimetype='application/json')
+
+
+# ============================================================
+# 预警管理路由
+# ============================================================
+
+@app.route("/alerts")
+def alerts_page():
+    """预警管理独立页面"""
+    return render_template("alerts.html")
+
+
+@app.route("/api/alerts", methods=["GET", "POST", "DELETE"])
+def alerts_api():
+    """预警规则 CRUD"""
+    if request.method == "GET":
+        status = request.args.get("status", "")
+        items = list_alert_rules(status=status if status else None)
+        # 添加类型标签
+        for item in items:
+            item["type_label"] = get_alert_type_label(item["alert_type"])
+        return Response(json.dumps(items, cls=NumpyEncoder, ensure_ascii=False),
+                        mimetype='application/json')
+
+    elif request.method == "POST":
+        data = request.json if request.is_json else request.form
+        stock_code = (data.get("code") or data.get("stock_code") or "").strip()
+        alert_type = (data.get("alert_type") or "").strip()
+        threshold = data.get("threshold")
+        message = (data.get("message") or "").strip()
+
+        if not stock_code or len(stock_code) != 6 or not stock_code.isdigit():
+            return jsonify({"error": "股票代码应为6位数字"}), 400
+
+        valid_types = ("price_above", "price_below", "signal_buy", "signal_sell",
+                       "stop_loss", "take_profit", "daily_drop", "daily_rise")
+        if alert_type not in valid_types:
+            return jsonify({"error": f"预警类型无效，可选: {', '.join(valid_types)}"}), 400
+
+        # 获取股票名称
+        stock_name = ""
+        try:
+            spot = fetch_spot_data(stock_code)
+            stock_name = spot.get("名称", stock_code)
+        except Exception:
+            stock_name = stock_code
+
+        threshold_val = float(threshold) if threshold else None
+
+        add_alert_rule(stock_code, stock_name, alert_type, threshold_val, message)
+        return jsonify({"ok": True, "code": stock_code, "name": stock_name,
+                        "alert_type": alert_type, "type_label": get_alert_type_label(alert_type)})
+
+    elif request.method == "DELETE":
+        rule_id = request.args.get("id", "")
+        if not rule_id:
+            return jsonify({"error": "请提供预警规则ID"}), 400
+        delete_alert_rule(int(rule_id))
+        return jsonify({"ok": True})
+
+
+@app.route("/api/alerts/check", methods=["POST"])
+def alerts_check():
+    """手动触发预警检查"""
+    result = check_all_alerts()
+    return Response(json.dumps(result, cls=NumpyEncoder, ensure_ascii=False),
+                    mimetype='application/json')
+
+
+@app.route("/api/alerts/summary")
+def alerts_summary():
+    """预警汇总(用于首页速览)"""
+    result = generate_alert_summary()
+    return Response(json.dumps(result, cls=NumpyEncoder, ensure_ascii=False),
+                    mimetype='application/json')
+
+
+@app.route("/api/alerts/<int:rule_id>/reset", methods=["POST"])
+def alert_reset(rule_id):
+    """重置已触发的预警为活跃状态"""
+    update_alert_status(rule_id, "active")
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>交易日志 - 股票信号分析系统 v4</title>
+  <style>
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-card: #0f3460;
+      --bg-card-hover: #1a4a8a;
+      --text-primary: #e0e0e0;
+      --text-secondary: #a0a0b0;
+      --text-muted: #606070;
+      --border: #2a2a4a;
+      --red-up: #e74c3c;
+      --green-down: #2ecc71;
+      --blue: #3498db;
+      --purple: #9b59b6;
+      --orange: #e67e22;
+      --yellow: #f1c40f;
+      --cyan: #00bcd4;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 0; border-bottom: 1px solid var(--border); margin-bottom: 20px;
+    }
+    header h1 { font-size: 22px; color: var(--cyan); font-weight: 500; }
+    header .subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+    .nav-links { display: flex; gap: 8px; }
+    .nav-link {
+      padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px;
+      background: var(--bg-card); color: var(--cyan); text-decoration: none;
+      font-size: 13px; cursor: pointer;
+    }
+    .nav-link:hover { border-color: var(--cyan); }
+    .nav-link.active { background: var(--cyan); color: #fff; }
+
+    .section-title {
+      font-size: 16px; color: var(--text-primary); margin: 28px 0 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title .badge {
+      font-size: 11px; padding: 2px 8px; border-radius: 4px;
+      background: var(--bg-card); color: var(--text-muted);
+    }
+
+    .summary-bar {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px; margin-bottom: 20px;
+    }
+    .summary-card {
+      background: var(--bg-secondary); border-radius: 12px; padding: 18px;
+      border: 1px solid var(--border); transition: border-color 0.3s;
+    }
+    .summary-card:hover { border-color: var(--cyan); }
+    .sc-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+    .sc-value { font-size: 24px; font-weight: 600; }
+    .sc-sub { font-size: 12px; margin-top: 4px; }
+    .text-red { color: var(--red-up); }
+    .text-green { color: var(--green-down); }
+    .text-cyan { color: var(--cyan); }
+    .text-yellow { color: var(--yellow); }
+    .text-muted { color: var(--text-muted); }
+
+    .hit-rate-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;
+    }
+    .hit-rate-card {
+      background: var(--bg-secondary); border-radius: 12px; padding: 20px;
+      border: 1px solid var(--border);
+    }
+    .hit-rate-card h3 { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
+    .hit-rate-big { font-size: 36px; font-weight: 700; }
+    .hit-rate-stats { display: flex; gap: 20px; margin-top: 10px; font-size: 13px; }
+    .hit-rate-stats span { color: var(--text-secondary); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table-wrap {
+      background: var(--bg-secondary); border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    table th {
+      padding: 10px 12px; text-align: left; font-weight: 500;
+      color: var(--text-muted); border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    table tr:hover td { background: rgba(0,188,212,0.05); }
+    .tag { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+    .tag-buy { background: rgba(231,76,60,0.2); color: var(--red-up); }
+    .tag-sell { background: rgba(46,204,113,0.2); color: var(--green-down); }
+    .tag-follow { background: rgba(0,188,212,0.15); color: var(--cyan); }
+    .tag-against { background: rgba(241,196,15,0.15); color: var(--yellow); }
+    .tag-hit { background: rgba(46,204,113,0.2); color: var(--green-down); }
+    .tag-miss { background: rgba(231,76,60,0.2); color: var(--red-up); }
+
+    .btn {
+      padding: 8px 16px; border: none; border-radius: 8px; cursor: pointer;
+      font-size: 13px; font-weight: 500; transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--cyan); color: #fff; }
+    .btn-danger { background: transparent; border: 1px solid var(--red-up); color: var(--red-up); }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      z-index: 1000; justify-content: center; align-items: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--bg-secondary); border-radius: 16px; padding: 28px;
+      width: 460px; max-width: 90vw; border: 1px solid var(--border);
+    }
+    .modal h2 { font-size: 18px; margin-bottom: 20px; color: var(--cyan); }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);
+      font-size: 14px; outline: none;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      border-color: var(--cyan);
+    }
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-group { flex: 1; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+    .empty-state { text-align: center; padding: 40px; color: var(--text-muted); }
+    .loading { text-align: center; padding: 40px; color: var(--text-muted); }
+    .filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+    .filter-bar select {
+      padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px;
+      background: var(--bg-card); color: var(--text-primary); font-size: 13px;
+    }
+
+    /* 响应式适配 */
+    @media (max-width: 768px) {
+      .container { padding: 10px; }
+      .page-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .nav-links { flex-wrap: wrap; gap: 6px; }
+
+      /* 汇总条2列 */
+      .summary-bar { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .summary-card { padding: 10px; }
+      .sc-value { font-size: 18px; }
+
+      /* 筛选栏纵向 */
+      .filter-bar { flex-direction: column; align-items: flex-start; gap: 8px; }
+
+      /* 命中率卡片单列 */
+      .hit-rate-grid { grid-template-columns: 1fr; }
+
+      /* 表格横向滚动 */
+      .data-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .data-table-wrap table { min-width: 600px; font-size: 12px; }
+
+      /* 弹窗全屏 */
+      .modal { width: 95vw !important; max-width: 95vw !important; max-height: 90vh; overflow-y: auto; padding: 16px; }
+      .form-row { flex-direction: column; gap: 0; }
+    }
+
+    @media (max-width: 480px) {
+      .sc-value { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div>
+      <h1>交易日志 & 信号命中率</h1>
+      <div class="subtitle">记录每次买卖决策 · 对比信号 vs 实际操作 · 量化模型准确率</div>
+    </div>
+    <div class="nav-links">
+      <a href="/" class="nav-link">分析</a>
+      <a href="/portfolio" class="nav-link">持仓</a>
+      <a href="/alerts" class="nav-link">预警</a>
+      <button class="btn btn-primary" onclick="showAddModal()">+ 记录交易</button>
+    </div>
+  </header>
+
+  <div class="summary-bar" id="summary-bar">
+    <div class="summary-card"><div class="sc-label">总交易次数</div><div class="sc-value text-cyan" id="sc-total">--</div></div>
+    <div class="summary-card"><div class="sc-label">买入次数</div><div class="sc-value text-red" id="sc-buy">--</div></div>
+    <div class="summary-card"><div class="sc-label">卖出次数</div><div class="sc-value text-green" id="sc-sell">--</div></div>
+    <div class="summary-card"><div class="sc-label">跟信号操作</div><div class="sc-value text-yellow" id="sc-follow">--</div><div class="sc-sub text-muted" id="sc-follow-rate"></div></div>
+  </div>
+
+  <div class="section-title">信号命中率 <span class="badge" id="hit-badge">--</span></div>
+  <div class="filter-bar">
+    <label style="font-size:13px;color:var(--text-secondary);">回溯范围:</label>
+    <select id="days-back" onchange="loadHitRate()">
+      <option value="7">最近7天</option>
+      <option value="30" selected>最近30天</option>
+      <option value="90">最近90天</option>
+      <option value="180">最近半年</option>
+    </select>
+    <label style="font-size:13px;color:var(--text-secondary);">观察周期:</label>
+    <select id="forward-days" onchange="loadHitRate()">
+      <option value="3">3天后</option>
+      <option value="5" selected>5天后</option>
+      <option value="10">10天后</option>
+      <option value="20">20天后(约1个月)</option>
+    </select>
+    <span style="font-size:12px;color:var(--text-muted);" id="hit-msg"></span>
+  </div>
+
+  <div class="hit-rate-grid">
+    <div class="hit-rate-card">
+      <h3>买入信号命中率（评分≥60 → 后续上涨？）</h3>
+      <div class="hit-rate-big text-red" id="buy-hit-rate">--</div>
+      <div class="hit-rate-stats">
+        <span>评估样本: <strong id="buy-evaluated">--</strong></span>
+        <span>平均收益: <strong id="buy-avg-return">--</strong></span>
+      </div>
+    </div>
+    <div class="hit-rate-card">
+      <h3>卖出信号命中率（评分<35 → 后续下跌？）</h3>
+      <div class="hit-rate-big text-green" id="sell-hit-rate">--</div>
+      <div class="hit-rate-stats">
+        <span>评估样本: <strong id="sell-evaluated">--</strong></span>
+        <span>平均收益: <strong id="sell-avg-return">--</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="hit-details-section" style="display:none;">
+    <div class="section-title">命中明细</div>
+    <div class="data-table-wrap" style="margin-bottom:24px;">
+      <table>
+        <thead>
+          <tr>
+            <th>股票</th>
+            <th>信号日期</th>
+            <th>评分</th>
+            <th>信号</th>
+            <th>入场价</th>
+            <th>N天后价</th>
+            <th>收益</th>
+            <th>命中</th>
+          </tr>
+        </thead>
+        <tbody id="hit-details-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section-title">交易记录</div>
+  <div class="data-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>交易日期</th>
+          <th>股票</th>
+          <th>操作</th>
+          <th>数量</th>
+          <th>价格</th>
+          <th>当时评分</th>
+          <th>当时信号</th>
+          <th>跟信号</th>
+          <th>理由</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="journal-body">
+        <tr><td colspan="10" class="loading">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="add-modal">
+  <div class="modal">
+    <h2>记录交易</h2>
+    <div class="form-group">
+      <label>股票代码</label>
+      <input type="text" id="t-code" placeholder="6位代码，如 600519" maxlength="6">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>操作类型</label>
+        <select id="t-action">
+          <option value="buy">买入</option>
+          <option value="sell">卖出</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>交易日期</label>
+        <input type="date" id="t-date">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>数量</label>
+        <input type="number" id="t-qty" placeholder="如 100" min="1">
+      </div>
+      <div class="form-group">
+        <label>成交价格</label>
+        <input type="number" id="t-price" placeholder="如 10.50" step="0.001" min="0.001">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>交易理由（选填）</label>
+      <textarea id="t-reason" rows="2" placeholder="为什么做这笔交易？比如：信号看多、基本面改善、止损等"></textarea>
+    </div>
+    <div class="form-group">
+      <label>
+        <input type="checkbox" id="t-follow" checked> 这次操作是否跟随了系统信号？
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" style="background:var(--bg-card);color:var(--text-secondary);" onclick="hideAddModal()">取消</button>
+      <button class="btn btn-primary" onclick="submitTrade()">确认记录</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function showToast(msg, type) {
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-' + (type || 'info');
+  toast.textContent = msg;
+  toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;padding:12px 20px;border-radius:8px;font-size:14px;max-width:400px;box-shadow:0 4px 12px rgba(0,0,0,0.3);' +
+    (type === 'success' ? 'background:rgba(46,204,113,0.9);color:#fff;' : 'background:rgba(0,188,212,0.9);color:#fff;');
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.3s'; }, 3000);
+  setTimeout(() => toast.remove(), 3400);
+}
+function fmtTime(s) {
+  if (!s) return '--';
+  return s.replace('T', ' ').substring(0, 16);
+}
+function fmtScore(s) {
+  if (s === null || s === undefined) return '<span class="text-muted">N/A</span>';
+  const val = parseFloat(s);
+  let cls = 'text-muted';
+  if (val >= 60) cls = 'text-red';
+  else if (val < 35) cls = 'text-green';
+  return `<span class="${cls}">${val.toFixed(0)}</span>`;
+}
+function actionLabel(a) {
+  if (a === 'buy') return '<span class="tag tag-buy">买入</span>';
+  return '<span class="tag tag-sell">卖出</span>';
+}
+function signalActionLabel(a) {
+  const map = { strong_buy: '强烈看多', buy: '看多', hold: '观望', sell: '看空', strong_sell: '强烈看空' };
+  return map[a] || a || '--';
+}
+
+async function loadSummary() {
+  try {
+    const resp = await fetch('/api/trade_journal/summary');
+    const data = await resp.json();
+    document.getElementById('sc-total').textContent = data.total_trades;
+    document.getElementById('sc-buy').textContent = data.buy_count;
+    document.getElementById('sc-sell').textContent = data.sell_count;
+    document.getElementById('sc-follow').textContent = data.follow_signal_count;
+    document.getElementById('sc-follow-rate').textContent = `跟信号率 ${data.follow_rate}%`;
+  } catch(e) { console.error(e); }
+}
+
+async function loadHitRate() {
+  const daysBack = document.getElementById('days-back').value;
+  const forwardDays = document.getElementById('forward-days').value;
+  document.getElementById('hit-msg').textContent = '计算中...';
+
+  try {
+    const resp = await fetch(`/api/signal_hit_rate?days_back=${daysBack}&forward_days=${forwardDays}`);
+    const data = await resp.json();
+
+    document.getElementById('hit-badge').textContent = `${data.total_signals}条信号`;
+    document.getElementById('buy-hit-rate').textContent = data.buy_hit_rate + '%';
+    document.getElementById('sell-hit-rate').textContent = data.sell_hit_rate + '%';
+    document.getElementById('buy-evaluated').textContent = data.buy_evaluated;
+    document.getElementById('sell-evaluated').textContent = data.sell_evaluated;
+
+    const buyReturn = data.buy_avg_return;
+    const sellReturn = data.sell_avg_return;
+    document.getElementById('buy-avg-return').innerHTML = `<span class="${buyReturn >= 0 ? 'text-red' : 'text-green'}">${buyReturn >= 0 ? '+' : ''}${buyReturn}%</span>`;
+    document.getElementById('sell-avg-return').innerHTML = `<span class="${sellReturn >= 0 ? 'text-red' : 'text-green'}">${sellReturn >= 0 ? '+' : ''}${sellReturn}%</span>`;
+
+    document.getElementById('hit-msg').textContent = data.message || '';
+
+    const details = [...(data.buy_details || []), ...(data.sell_details || [])];
+    const sec = document.getElementById('hit-details-section');
+    const body = document.getElementById('hit-details-body');
+    if (details.length > 0) {
+      sec.style.display = 'block';
+      body.innerHTML = details.map(d => `
+        <tr>
+          <td>${d.stock_name}(${d.stock_code})</td>
+          <td>${d.signal_date}</td>
+          <td>${fmtScore(d.signal_score)}</td>
+          <td>${signalActionLabel(d.signal_action)}</td>
+          <td>${d.entry_price}</td>
+          <td>${d.exit_price}</td>
+          <td class="${d.return_pct >= 0 ? 'text-red' : 'text-green'}">${d.return_pct >= 0 ? '+' : ''}${d.return_pct}%</td>
+          <td>${d.hit ? '<span class="tag tag-hit">命中</span>' : '<span class="tag tag-miss">未中</span>'}</td>
+        </tr>
+      `).join('');
+    } else {
+      sec.style.display = 'none';
+    }
+  } catch(e) {
+    document.getElementById('hit-msg').textContent = '加载失败';
+    console.error(e);
+  }
+}
+
+async function loadJournal() {
+  const body = document.getElementById('journal-body');
+  body.innerHTML = '<tr><td colspan="10" class="loading">加载中...</td></tr>';
+  try {
+    const resp = await fetch('/api/trade_journal');
+    const data = await resp.json();
+    if (!data || data.length === 0) {
+      body.innerHTML = '<tr><td colspan="10" class="empty-state">暂无交易记录，点击"记录交易"开始</td></tr>';
+      return;
+    }
+    body.innerHTML = data.map(j => `
+      <tr>
+        <td style="white-space:nowrap;">${fmtTime(j.trade_date || j.created_at)}</td>
+        <td>${j.stock_name || j.stock_code}(${j.stock_code})</td>
+        <td>${actionLabel(j.action_type)}</td>
+        <td>${j.quantity}</td>
+        <td>${parseFloat(j.price).toFixed(3)}</td>
+        <td>${fmtScore(j.signal_score)}</td>
+        <td style="font-size:12px;">${j.signal_label || signalActionLabel(j.signal_action) || '--'}</td>
+        <td>${j.follow_signal ? '<span class="tag tag-follow">跟信号</span>' : '<span class="tag tag-against">逆信号</span>'}</td>
+        <td style="font-size:12px;color:var(--text-secondary);max-width:200px;">${j.reason || '--'}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteJournal(${j.id})">删除</button></td>
+      </tr>
+    `).join('');
+  } catch(e) {
+    body.innerHTML = '<tr><td colspan="10" class="empty-state">加载失败</td></tr>';
+  }
+}
+
+function showAddModal() {
+  // 默认填入今天日期
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('t-date').value = today;
+  document.getElementById('add-modal').classList.add('show');
+}
+function hideAddModal() { document.getElementById('add-modal').classList.remove('show'); }
+
+async function submitTrade() {
+  const code = document.getElementById('t-code').value.trim();
+  const action = document.getElementById('t-action').value;
+  const qty = document.getElementById('t-qty').value;
+  const price = document.getElementById('t-price').value;
+  const reason = document.getElementById('t-reason').value.trim();
+  const follow = document.getElementById('t-follow').checked;
+  const tradeDate = document.getElementById('t-date').value;
+
+  if (!code || code.length !== 6) { alert('请输入6位股票代码'); return; }
+  if (!qty || parseInt(qty) <= 0) { alert('请输入有效数量'); return; }
+  if (!price || parseFloat(price) <= 0) { alert('请输入有效价格'); return; }
+
+  try {
+    const resp = await fetch('/api/trade_journal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, action_type: action, quantity: parseInt(qty), price: parseFloat(price), reason, follow_signal: follow, trade_date: tradeDate })
+    });
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+    hideAddModal();
+    document.getElementById('t-code').value = '';
+    document.getElementById('t-qty').value = '';
+    document.getElementById('t-price').value = '';
+    document.getElementById('t-reason').value = '';
+    loadJournal();
+    loadSummary();
+    // 显示持仓联动结果
+    if (data.holding_synced) {
+      showToast(`持仓已同步更新: ${data.holding_action}`, 'success');
+    } else if (data.action_type === 'sell') {
+      showToast('交易已记录(无对应持仓，未更新持仓表)', 'info');
+    }
+  } catch(e) { alert('提交失败: ' + e.message); }
+}
+
+async function deleteJournal(id) {
+  if (!confirm('确定删除这条交易记录？')) return;
+  try {
+    await fetch(`/api/trade_journal?id=${id}`, { method: 'DELETE' });
+    loadJournal();
+    loadSummary();
+  } catch(e) { alert('删除失败'); }
+}
+
+loadSummary();
+loadHitRate();
+loadJournal();
+</script>
+</body>
+</html>
