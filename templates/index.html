@@ -206,6 +206,25 @@
       font-weight: 500;
     }
 
+    .header-right .settings-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 8px;
+      padding: 4px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--cyan);
+      text-decoration: none;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .header-right .settings-link:hover {
+      border-color: var(--cyan);
+      background: rgba(0,188,212,0.08);
+    }
+
     /* ============================================== */
     /* 工具栏 - 分组布局                              */
     /* ============================================== */
@@ -354,12 +373,13 @@
     /* ============================================== */
     .feature-menu {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 10px;
       flex: 1;
     }
 
     .feature-card {
+      position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -387,6 +407,37 @@
     .feature-card .fc-icon { font-size: 26px; line-height: 1; }
     .feature-card .fc-title { font-weight: 500; color: var(--cyan); }
     .feature-card .fc-sub { font-size: 11px; color: var(--text-muted); text-align: center; }
+
+    .feature-card .fc-badge {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      font-size: 10px;
+      padding: 1px 7px;
+      border-radius: 8px;
+      background: rgba(0,188,212,0.15);
+      color: var(--cyan);
+      letter-spacing: 0.5px;
+    }
+
+    .feature-card .fc-badge.action {
+      background: rgba(230,126,34,0.18);
+      color: var(--orange);
+    }
+
+    .feature-menu .feature-divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-primary);
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      padding: 4px;
+      min-width: 64px;
+    }
 
     /* ============================================== */
     /* 速览面板 - 新增                                */
@@ -1204,6 +1255,7 @@
       <div class="header-right">
         <div class="date-text" id="date-text">--</div>
         <span id="market-badge-container"></span>
+        <div><a href="/settings" class="settings-link" title="飞书推送设置">⚙ 推送设置</a></div>
       </div>
     </header>
 
@@ -1231,31 +1283,32 @@
         <span class="toolbar-label">功能</span>
         <div class="feature-menu">
           <a href="/portfolio" class="feature-card">
+            <span class="fc-badge">页面</span>
             <span class="fc-icon">💼</span>
             <span class="fc-title">持仓管理</span>
             <span class="fc-sub">实时盈亏 · 智能建议</span>
           </a>
           <a href="/journal" class="feature-card">
+            <span class="fc-badge">页面</span>
             <span class="fc-icon">📝</span>
             <span class="fc-title">交易日志</span>
             <span class="fc-sub">信号命中率回溯</span>
           </a>
           <a href="/alerts" class="feature-card">
+            <span class="fc-badge">页面</span>
             <span class="fc-icon">🔔</span>
             <span class="fc-title">预警中心</span>
             <span class="fc-sub">8 类规则手动检查</span>
           </a>
-          <a href="/settings" class="feature-card">
-            <span class="fc-icon">⚙</span>
-            <span class="fc-title">推送设置</span>
-            <span class="fc-sub">飞书 webhook · 频率</span>
-          </a>
+          <div class="feature-divider">快捷<br>操作</div>
           <button class="feature-card" id="scan-btn" onclick="doDailyScan()">
+            <span class="fc-badge action">操作</span>
             <span class="fc-icon">📊</span>
             <span class="fc-title">扫描自选股</span>
             <span class="fc-sub">生成每日简报</span>
           </button>
           <button class="feature-card" onclick="showDashboard()">
+            <span class="fc-badge action">操作</span>
             <span class="fc-icon">📋</span>
             <span class="fc-title">组合仪表盘</span>
             <span class="fc-sub">多股信号一览</span>
