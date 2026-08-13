@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>交易日志 - 股票信号分析系统 v4</title>
+  <title>交易日志 - 股票信号分析系统 v4.2</title>
   <style>
     :root {
       --bg-primary: #1a1a2e;
@@ -43,6 +43,8 @@
       font-size: 13px; cursor: pointer;
     }
     .nav-link:hover { border-color: var(--cyan); }
+    .nav-link.back-home { border-color: var(--orange); color: var(--orange); }
+    .nav-link.back-home:hover { background: rgba(230,126,34,0.12); }
     .nav-link.active { background: var(--cyan); color: #fff; }
 
     .section-title {
@@ -186,9 +188,10 @@
       <div class="subtitle">记录每次买卖决策 · 对比信号 vs 实际操作 · 量化模型准确率</div>
     </div>
     <div class="nav-links">
-      <a href="/" class="nav-link">分析</a>
+      <a href="/" class="nav-link back-home" title="返回首页">← 首页</a>
       <a href="/portfolio" class="nav-link">持仓</a>
       <a href="/alerts" class="nav-link">预警</a>
+      <a href="/settings" class="nav-link">推送设置</a>
       <button class="btn btn-primary" onclick="showAddModal()">+ 记录交易</button>
     </div>
   </header>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>股票信号分析系统 v4.1</title>
+  <title>股票信号分析系统 v4.2</title>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   <style>
     :root {
@@ -346,27 +346,47 @@
       white-space: nowrap;
     }
 
-    .ghost-btn:hover { border-color: var(--purple); color: var(--purple); }
+    .ghost-btn:hover { border-color: var(--cyan); color: var(--cyan); }
     .ghost-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    .accent-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 9px 16px;
-      border: 1px solid var(--orange);
-      border-radius: 8px;
-      background: rgba(230,126,34,0.08);
-      color: var(--orange);
-      cursor: pointer;
-      font-size: 13px;
-      text-decoration: none;
-      font-weight: 500;
-      transition: all 0.2s;
-      white-space: nowrap;
+    /* ============================================== */
+    /* 功能菜单 - 3列网格, 视觉权重统一              */
+    /* ============================================== */
+    .feature-menu {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      flex: 1;
     }
 
-    .accent-btn:hover { background: rgba(230,126,34,0.18); }
+    .feature-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 14px 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      text-decoration: none;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      font-size: 13px;
+    }
+
+    .feature-card:hover {
+      border-color: var(--cyan);
+      background: var(--bg-card-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,188,212,0.15);
+    }
+
+    .feature-card .fc-icon { font-size: 26px; line-height: 1; }
+    .feature-card .fc-title { font-weight: 500; color: var(--cyan); }
+    .feature-card .fc-sub { font-size: 11px; color: var(--text-muted); text-align: center; }
 
     /* ============================================== */
     /* 速览面板 - 新增                                */
@@ -1082,7 +1102,7 @@
         flex: 1 1 100%;
       }
       .period-btns { width: 100%; justify-content: center; }
-      .primary-btn, .ghost-btn, .accent-btn {
+      .primary-btn, .ghost-btn {
         flex: 1;
         text-align: center;
         font-size: 13px;
@@ -1178,8 +1198,8 @@
   <div class="container">
     <header>
       <div class="header-left">
-        <h1>📈 股票信号分析系统<span class="version-tag">v4.1</span></h1>
-        <div class="subtitle">交易驱动持仓 · 日期格式统一 · 交易闭环 · 信号命中率 · 智能预警</div>
+        <h1>📈 股票信号分析系统<span class="version-tag">v4.2</span></h1>
+        <div class="subtitle">交易驱动持仓 · 信号命中率 · 智能预警 · 内建飞书推送</div>
       </div>
       <div class="header-right">
         <div class="date-text" id="date-text">--</div>
@@ -1206,15 +1226,41 @@
         </div>
         <button class="primary-btn" id="analyze-btn" onclick="doAnalyze()">▶ 分析</button>
       </div>
-      <!-- 第二行：组合操作 -->
-      <div class="toolbar-row">
-        <span class="toolbar-label">组合</span>
-        <button class="ghost-btn" id="scan-btn" onclick="doDailyScan()">📊 扫描自选股</button>
-        <button class="ghost-btn" onclick="showDashboard()">📋 组合仪表盘</button>
-        <a href="/portfolio" class="accent-btn">💼 持仓管理</a>
-        <a href="/journal" class="ghost-btn">📝 交易日志</a>
-        <a href="/alerts" class="ghost-btn">🔔 预警中心</a>
-        <a href="/settings" class="ghost-btn">⚙ 推送设置</a>
+      <!-- 第二行：功能菜单 -->
+      <div class="toolbar-row" style="align-items: stretch;">
+        <span class="toolbar-label">功能</span>
+        <div class="feature-menu">
+          <a href="/portfolio" class="feature-card">
+            <span class="fc-icon">💼</span>
+            <span class="fc-title">持仓管理</span>
+            <span class="fc-sub">实时盈亏 · 智能建议</span>
+          </a>
+          <a href="/journal" class="feature-card">
+            <span class="fc-icon">📝</span>
+            <span class="fc-title">交易日志</span>
+            <span class="fc-sub">信号命中率回溯</span>
+          </a>
+          <a href="/alerts" class="feature-card">
+            <span class="fc-icon">🔔</span>
+            <span class="fc-title">预警中心</span>
+            <span class="fc-sub">8 类规则手动检查</span>
+          </a>
+          <a href="/settings" class="feature-card">
+            <span class="fc-icon">⚙</span>
+            <span class="fc-title">推送设置</span>
+            <span class="fc-sub">飞书 webhook · 频率</span>
+          </a>
+          <button class="feature-card" id="scan-btn" onclick="doDailyScan()">
+            <span class="fc-icon">📊</span>
+            <span class="fc-title">扫描自选股</span>
+            <span class="fc-sub">生成每日简报</span>
+          </button>
+          <button class="feature-card" onclick="showDashboard()">
+            <span class="fc-icon">📋</span>
+            <span class="fc-title">组合仪表盘</span>
+            <span class="fc-sub">多股信号一览</span>
+          </button>
+        </div>
       </div>
     </div>
 
