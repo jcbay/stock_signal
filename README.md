@@ -45,6 +45,10 @@
 - 浮动抽屉式自选股管理，不占用内容区
 - 每日一键扫描全部自选股信号
 
+### 1.8 内建飞书推送简报（v4.2）
+- 系统内置简报推送：配置飞书机器人后，按设定频率自动把简报推送到群（默认仅 A股交易时段的每个整点），无需 WorkBuddy 等外部工具
+- 网页「⚙ 推送设置」界面：可开关推送、选择频率、测试发送、立即推送一次（详见第 9 节）
+
 ---
 
 ## 2. 技术栈
@@ -57,6 +61,9 @@
 | 缓存 / 存储 | SQLite（首次运行自动初始化） |
 | 统计 | scipy |
 | 数据处理 | pandas + numpy |
+| 调度 | APScheduler（内建推送定时任务） |
+| 配置 | PyYAML（读写 config.yaml） |
+| HTTP 客户端 | requests（飞书 webhook 发送） |
 | 云端运行 | gunicorn |
 
 ---
@@ -73,17 +80,23 @@ stock_signal/
 ├── portfolio.py        # 持仓管理 + 智能建议（含 recovery 逻辑）
 ├── trade_journal.py    # 交易日志 + 信号命中率 + 持仓同步（单向数据流入口）
 ├── alert_checker.py    # 智能预警：8类规则检查与汇总
+├── briefing.py         # 简报数据生成（被 /api/daily_scan 与飞书推送复用）
+├── feishu_push.py      # 飞书推送：卡片渲染 + 发送 + 交易时段调度
+├── config.py           # config.yaml 读写（推送开关 / webhook / 频率）
+├── config.example.yaml # 配置模板（含说明，可提交）
 ├── static/             # 前端静态资源（JS / CSS）
 ├── templates/
 │   ├── index.html      # 分析主页（K线/因子/回测/场景/信号趋势）
 │   ├── portfolio.html  # 持仓管理页
 │   ├── journal.html    # 交易日志 + 命中率页
-│   └── alerts.html     # 智能预警中心页
+│   ├── alerts.html     # 智能预警中心页
+│   └── settings.html   # 推送设置页
 ├── start.sh            # 启动脚本（自动创建 venv 并安装依赖，后台运行）
 ├── stop.sh             # 停止脚本
 ├── render.yaml         # Render 云端部署配置
 ├── requirements.txt    # Python 依赖
 ├── .gitignore
+├── config.yaml         # 本地配置（含 webhook，**已被 .gitignore 忽略，切勿提交**）
 └── README.md
 ```
 
@@ -146,7 +159,7 @@ PORT=9000 venv/bin/python app.py
 1. 在 Render 新建 **Web Service**，关联本 GitHub 仓库（`jcbay/stock_signal`）。
 2. Render 会自动读取 `render.yaml`：
    - 构建命令：`pip install -r requirements.txt`
-   - 启动命令：`gunicorn app:app --workers 2 --timeout 120`
+   - 启动命令：`gunicorn app:app --workers 1 --timeout 120`（workers=1 避免内建推送重复发送，详见第 9.4 节）
    - 环境变量：`PYTHON_VERSION=3.11.6`、`FLASK_DEBUG=0`
 3. Render 提供 `PORT` 环境变量，服务监听该端口，部署完成后给出 `https://` 域名。
 4. 免费实例在休眠后首次访问会有冷启动延迟，属正常现象。
@@ -176,11 +189,34 @@ PORT=9000 venv/bin/python app.py
 
 ---
 
-## 9. 可选的盘前飞书简报
+## 9. 内建飞书推送简报（v4.2）
 
-- 盘前自选股简报由 **WorkBuddy 自动化**（非本仓库代码）定时生成并推送到飞书群。
-- 如需启用，请在本机 WorkBuddy 中配置对应自动化任务与飞书自定义机器人 Webhook。
-- **本仓库不含任何密钥或推送代码**，纯前端 + 本地服务，下载即可运行。
+系统已内置简报推送能力，**无需依赖 WorkBuddy 或其他外部调度**，只要服务在运行即可自动推送到飞书群。
+
+### 9.1 配置步骤
+1. 复制配置模板：`cp config.example.yaml config.yaml`（首次需要；`config.yaml` 已被 `.gitignore` 忽略，不会上传）。
+2. 在飞书群「设置 → 群机器人 → 添加机器人（自定义）」复制 Webhook 地址，填入 `config.yaml` 的 `push.feishu_webhook`。
+3. 启动服务后，打开网页顶部工具栏「⚙ 推送设置」即可在界面上开关推送、修改频率、测试发送。
+
+> 也可不手动改 `config.yaml`，直接在网页「推送设置」页填写并保存（设置页会写回 `config.yaml`）。
+
+### 9.2 推送频率（默认：仅交易时段的每个整点）
+- `hourly_trading`（默认）：A股交易日 9:30–11:30、13:00–15:00 内的每个整点推送一次。
+- `hourly`：每小时推送（不限交易时段）。
+- `daily_preopen`：每个交易日 09:26 推送一次（盘前）。
+
+### 9.3 接口
+- `GET /api/push/config`：读取当前推送配置（webhook 脱敏）
+- `POST /api/push/config`：保存配置（enabled / webhook / 频率 / 仅交易时段）
+- `POST /api/push/test`：发送一条测试消息验证 webhook
+- `POST /api/push/now`：立即生成简报并推送一次
+- 页面入口：顶部工具栏「⚙ 推送设置」
+
+### 9.4 注意事项
+- **敏感信息**：`config.yaml` 含飞书 webhook，已被 gitignore，切勿手动 `git add` 提交。
+- **多实例重复推送**：调度器在每个进程各起一个。本地单进程 / 云部署 `workers=1` 无问题；若 `workers>1` 会重复推送（当前版本按计划暂不加锁）。
+- **Render 免费实例休眠**：休眠期间定时任务不运行，唤醒后才会补触发。本地常驻最稳。
+- 旧的 WorkBuddy 盘前简报自动化仍可作为备份保留；启用内建推送后建议停用，避免重复推送。
 
 ---
 

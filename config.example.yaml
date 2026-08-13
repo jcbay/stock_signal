@@ -1,0 +1,15 @@
+# 股票信号系统 - 配置文件模板
+# 用法：把本文件复制为 config.yaml，并填入你自己的值。
+# 注意：config.yaml 已被 .gitignore 忽略，不会上传到 GitHub，可放心填敏感信息。
+#
+# 飞书自定义机器人创建步骤：
+#   1. 飞书群 → 设置 → 群机器人 → 添加机器人（自定义）
+#   2. 复制 Webhook 地址（形如 https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx）
+#   3. 粘贴到下方 feishu_webhook
+
+push:
+  enabled: false                      # 是否启用自动推送
+  feishu_webhook: ""                  # 飞书自定义机器人 Webhook 地址
+  schedule: "0 * * * *"               # cron 表达式（分 时 日 月 周），默认每个整点触发
+  only_trading_hours: true            # true=仅 A股交易时段（工作日 9:30-11:30 / 13:00-15:00）推送
+  frequency_preset: "hourly_trading"  # hourly_trading | hourly | daily_preopen（设置页可选，会改写 schedule）

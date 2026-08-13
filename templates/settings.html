@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>推送设置 - 股票信号分析系统</title>
+  <style>
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-card: #0f3460;
+      --bg-card-hover: #1a4a8a;
+      --text-primary: #e0e0e0;
+      --text-secondary: #a0a0b0;
+      --text-muted: #606070;
+      --border: #2a2a4a;
+      --red-up: #e74c3c;
+      --green-down: #2ecc71;
+      --blue: #3498db;
+      --purple: #9b59b6;
+      --orange: #e67e22;
+      --yellow: #f1c40f;
+      --cyan: #00bcd4;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg-primary); color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+    }
+    .container { max-width: 860px; margin: 0 auto; padding: 20px; }
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 0; border-bottom: 1px solid var(--border); margin-bottom: 20px;
+    }
+    header h1 { font-size: 22px; color: var(--cyan); font-weight: 500; }
+    header .subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+    .nav-links { display: flex; gap: 8px; flex-wrap: wrap; }
+    .nav-link {
+      padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px;
+      background: var(--bg-card); color: var(--cyan); text-decoration: none;
+      font-size: 13px; cursor: pointer;
+    }
+    .nav-link:hover { border-color: var(--cyan); }
+
+    .section-title { font-size: 16px; color: var(--text-primary); margin: 26px 0 12px; }
+    .text-red { color: var(--red-up); }
+    .text-green { color: var(--green-down); }
+    .text-cyan { color: var(--cyan); }
+    .text-muted { color: var(--text-muted); }
+    .text-orange { color: var(--orange); }
+
+    .card {
+      background: var(--bg-secondary); border-radius: 12px; padding: 22px;
+      border: 1px solid var(--border);
+    }
+    .form-group { margin-bottom: 18px; }
+    .form-group label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+    .form-group .hint { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .form-group input[type="text"], .form-group select {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+      border-radius: 8px; background: var(--bg-primary); color: var(--text-primary);
+      font-size: 14px; outline: none;
+    }
+    .form-group input[type="text"]:focus, .form-group select:focus { border-color: var(--cyan); }
+
+    .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .switch-row .switch-label { font-size: 14px; color: var(--text-primary); }
+    .switch-row .switch-sub { font-size: 12px; color: var(--text-muted); }
+
+    /* 开关样式 */
+    .switch { position: relative; display: inline-block; width: 46px; height: 26px; flex: none; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; inset: 0; background: var(--border);
+      transition: .2s; border-radius: 26px;
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px;
+      background: #fff; transition: .2s; border-radius: 50%;
+    }
+    .switch input:checked + .slider { background: var(--cyan); }
+    .switch input:checked + .slider:before { transform: translateX(20px); }
+
+    .btn {
+      padding: 9px 18px; border: none; border-radius: 8px; cursor: pointer;
+      font-size: 13px; font-weight: 500; transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--cyan); color: #fff; }
+    .btn-check { background: var(--orange); color: #fff; }
+    .btn-ghost { background: transparent; border: 1px solid var(--cyan); color: var(--cyan); }
+
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+    .status-box {
+      margin-top: 16px; padding: 12px 14px; border-radius: 8px;
+      background: var(--bg-primary); border: 1px solid var(--border);
+      font-size: 14px; min-height: 20px;
+    }
+    .empty-state { text-align: center; padding: 30px; color: var(--text-muted); }
+    .info-note {
+      margin-top: 18px; font-size: 12px; color: var(--text-muted);
+      border-top: 1px dashed var(--border); padding-top: 14px; line-height: 1.8;
+    }
+
+    @media (max-width: 768px) {
+      .container { padding: 10px; }
+      .nav-links { flex-wrap: wrap; gap: 6px; }
+      .card { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div>
+      <h1>推送设置</h1>
+      <div class="subtitle">内建飞书简报推送 · 无需 WorkBuddy 等外部工具</div>
+    </div>
+    <div class="nav-links">
+      <a href="/" class="nav-link">分析</a>
+      <a href="/portfolio" class="nav-link">持仓</a>
+      <a href="/journal" class="nav-link">交易日志</a>
+      <a href="/alerts" class="nav-link">预警中心</a>
+    </div>
+  </header>
+
+  <div class="card" id="settings-card">
+    <div class="form-group">
+      <div class="switch-row">
+        <div>
+          <div class="switch-label">启用自动推送</div>
+          <div class="switch-sub">关闭后即使配置了 webhook 也不会自动发送</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="enabled">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>飞书机器人 Webhook</label>
+      <input type="text" id="webhook" autocomplete="off" placeholder="粘贴飞书自定义机器人 Webhook 地址">
+      <div class="hint" id="webhook-hint">在飞书群「设置 → 群机器人 → 添加机器人（自定义）」复制 Webhook 地址。</div>
+    </div>
+
+    <div class="form-group">
+      <label>推送频率</label>
+      <select id="freq">
+        <option value="hourly_trading">仅交易时段整点（工作日 9:30-11:30 / 13:00-15:00 的每个整点）</option>
+        <option value="hourly">每小时（不限交易时段）</option>
+        <option value="daily_preopen">每日盘前（工作日 09:26 一次）</option>
+      </select>
+      <div class="hint">默认「仅交易时段整点」：非交易时段与夜间不会重复推送无意义内容。</div>
+    </div>
+
+    <div class="form-group">
+      <div class="switch-row">
+        <div>
+          <div class="switch-label">仅交易时段推送</div>
+          <div class="switch-sub">开启后，非 A股交易时段自动跳过（与上方频率配合）</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="only_trade">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+      <button class="btn btn-check" onclick="testPush()">发送测试消息</button>
+      <button class="btn btn-ghost" onclick="pushNow()">立即推送一次</button>
+    </div>
+
+    <div class="status-box" id="status">加载中...</div>
+
+    <div class="info-note">
+      说明：保存会写回 <code>config.yaml</code>（已被 .gitignore 忽略，不会上传）。<br>
+      调度器在每个整点检查「是否启用 + 是否在交易时段」，命中才推送；改动频率后即时生效，无需重启服务。<br>
+      接口：GET/POST <code>/api/push/config</code>、POST <code>/api/push/test</code>、POST <code>/api/push/now</code>。
+    </div>
+  </div>
+</div>
+
+<script>
+function setStatus(msg, tone) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status-box text-' + (tone || 'muted');
+}
+
+async function loadConfig() {
+  try {
+    const r = await fetch('/api/push/config');
+    const c = await r.json();
+    document.getElementById('enabled').checked = !!c.enabled;
+    document.getElementById('freq').value = c.frequency_preset || 'hourly_trading';
+    document.getElementById('only_trade').checked = !!c.only_trading_hours;
+    const whInput = document.getElementById('webhook');
+    const hint = document.getElementById('webhook-hint');
+    if (c.feishu_webhook_configured) {
+      whInput.placeholder = '已配置（' + (c.feishu_webhook_masked || '') + '），留空则不修改';
+      hint.textContent = '当前已配置飞书机器人，如需更换请填写新地址，否则留空即可。';
+    } else {
+      whInput.placeholder = '粘贴飞书自定义机器人 Webhook 地址';
+      hint.textContent = '在飞书群「设置 → 群机器人 → 添加机器人（自定义）」复制 Webhook 地址。';
+    }
+    setStatus('配置已加载', 'muted');
+  } catch (e) {
+    setStatus('加载配置失败: ' + e.message, 'red');
+  }
+}
+
+async function saveConfig() {
+  const body = {
+    enabled: document.getElementById('enabled').checked,
+    frequency_preset: document.getElementById('freq').value,
+    only_trading_hours: document.getElementById('only_trade').checked,
+  };
+  const wh = document.getElementById('webhook').value.trim();
+  if (wh) body.feishu_webhook = wh;
+  setStatus('保存中...', 'muted');
+  try {
+    const r = await fetch('/api/push/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      setStatus('配置已保存', 'cyan');
+      document.getElementById('webhook').value = '';
+    } else {
+      setStatus('保存失败: ' + JSON.stringify(d), 'red');
+    }
+  } catch (e) {
+    setStatus('保存失败: ' + e.message, 'red');
+  }
+}
+
+async function testPush() {
+  setStatus('发送测试消息中...', 'muted');
+  try {
+    const r = await fetch('/api/push/test', { method: 'POST' });
+    const d = await r.json();
+    setStatus(d.message, d.ok ? 'cyan' : 'red');
+  } catch (e) {
+    setStatus('测试失败: ' + e.message, 'red');
+  }
+}
+
+async function pushNow() {
+  setStatus('正在生成简报并推送...', 'muted');
+  try {
+    const r = await fetch('/api/push/now', { method: 'POST' });
+    const d = await r.json();
+    setStatus(d.message, d.ok ? 'cyan' : 'red');
+  } catch (e) {
+    setStatus('推送失败: ' + e.message, 'red');
+  }
+}
+
+loadConfig();
+</script>
+</body>
+</html>

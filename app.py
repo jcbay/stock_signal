@@ -22,6 +22,9 @@ from db import (save_score_history, save_backtest_result, load_backtest_result,
 from portfolio import get_portfolio_overview
 from trade_journal import log_trade, get_trade_journal_summary, calc_signal_hit_rate
 from alert_checker import check_all_alerts, generate_alert_summary, get_alert_type_label
+from briefing import build_briefing
+import config as config_mod
+import feishu_push
 
 class NumpyEncoder(json.JSONEncoder):
     """处理numpy类型的JSON编码器"""
@@ -248,112 +251,10 @@ def watchlist():
 
 @app.route("/api/daily_scan")
 def daily_scan():
-    """扫描全部自选股，生成每日投资简报"""
-    items = list_watchlist()
-    if not items:
+    """扫描全部自选股，生成每日投资简报（数据由 briefing.build_briefing 生成，与推送共用）"""
+    briefing = build_briefing()
+    if briefing is None:
         return jsonify({"error": "自选股列表为空，请先添加自选股"}), 400
-
-    results = []
-    for item in items:
-        code = item["stock_code"]
-        try:
-            hist_df, spot_dict, stock_name, index_df = fetch_stock_data(code, "3m")
-            if hist_df.empty or len(hist_df) < 30:
-                results.append({
-                    "stock_code": code, "stock_name": item.get("stock_name", code),
-                    "error": "数据不足", "overall_score": None,
-                    "recommendation": "无法分析", "action_type": "hold",
-                    "signal_strength": "无"
-                })
-                continue
-
-            if index_df is not None and len(index_df) >= 30:
-                index_df = calc_all_indicators(index_df)
-
-            # ETF / 个股路由
-            etf_flag = is_etf(code)
-            if etf_flag:
-                analysis_result = analyze_etf(hist_df, spot_dict)
-                report = build_etf_report(analysis_result, code, item.get("stock_name", stock_name),
-                                          spot_dict, hist_df=hist_df, index_df=index_df)
-            else:
-                analysis_result = analyze_all(hist_df, spot_dict)
-                report = build_report(analysis_result, code, item.get("stock_name", stock_name),
-                                       spot_dict, hist_df=hist_df, index_df=index_df)
-
-            # 保存评分记录
-            save_score_history({
-                "stock_code": code,
-                "stock_name": report["stock_name"],
-                "overall_score": report["overall_score"],
-                "recommendation": report["recommendation"],
-                "signal_strength": report["signal_strength"],
-                "action_type": report["action_type"],
-                "trend_veto": report["trend_veto"],
-                "factor_scores": report["scores"],
-                "market_regime": report["market_regime"],
-            })
-
-            results.append({
-                "stock_code": code,
-                "stock_name": report["stock_name"],
-                "overall_score": report["overall_score"],
-                "recommendation": report["recommendation"],
-                "action_type": report["action_type"],
-                "signal_strength": report["signal_strength"],
-                "trend_veto": report["trend_veto"],
-                "summary": report["summary"],
-                "risk_level": report.get("risk_management", {}).get("risk_level", "中"),
-                "stop_loss": report.get("risk_management", {}).get("stop_loss", "N/A"),
-                "position_pct": report.get("risk_management", {}).get("position_pct", 0),
-            })
-        except Exception as e:
-            results.append({
-                "stock_code": code, "stock_name": item.get("stock_name", code),
-                "error": str(e), "overall_score": None,
-                "recommendation": "分析出错", "action_type": "hold",
-                "signal_strength": "无"
-            })
-
-    # 按评分排序，分类
-    buy_list = [r for r in results if r.get("action_type") in ("strong_buy", "buy") and not r.get("error")]
-    hold_list = [r for r in results if r.get("action_type") == "hold" and not r.get("error")]
-    sell_list = [r for r in results if r.get("action_type") in ("sell", "strong_sell") and not r.get("error")]
-    error_list = [r for r in results if r.get("error")]
-
-    buy_list.sort(key=lambda x: x.get("overall_score", 0), reverse=True)
-    sell_list.sort(key=lambda x: x.get("overall_score", 0))
-
-    # 大盘环境
-    try:
-        index_df_scan = fetch_index_data("000001", datalen=90)
-        if index_df_scan is not None and len(index_df_scan) >= 30:
-            index_df_scan = calc_all_indicators(index_df_scan)
-            regime, regime_desc = detect_market_regime(index_df_scan)
-        else:
-            regime, regime_desc = "unknown", "大盘数据不足"
-    except Exception:
-        regime, regime_desc = "unknown", "获取失败"
-
-    avg_score = np.mean([r["overall_score"] for r in results if r.get("overall_score")]) if any(r.get("overall_score") for r in results) else 0
-
-    briefing = {
-        "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "regime": regime,
-        "regime_desc": regime_desc,
-        "avg_score": round(float(avg_score), 1),
-        "total_count": len(results),
-        "buy_count": len(buy_list),
-        "hold_count": len(hold_list),
-        "sell_count": len(sell_list),
-        "error_count": len(error_list),
-        "buy_list": buy_list[:5],
-        "hold_list": hold_list[:5],
-        "sell_list": sell_list[:5],
-        "error_list": error_list,
-        "results": results,
-    }
-
     return Response(json.dumps(briefing, cls=NumpyEncoder, ensure_ascii=False),
                     mimetype='application/json')
 
@@ -693,6 +594,66 @@ def alert_reset(rule_id):
     """重置已触发的预警为活跃状态"""
     update_alert_status(rule_id, "active")
     return jsonify({"ok": True})
+
+
+@app.route("/settings")
+def settings_page():
+    return render_template("settings.html")
+
+
+@app.route("/api/push/config", methods=["GET"])
+def push_config_get():
+    cfg = config_mod.get_config()
+    push = cfg.get("push", {})
+    webhook = (push.get("feishu_webhook") or "").strip()
+    return jsonify({
+        "enabled": push.get("enabled", False),
+        "feishu_webhook_configured": bool(webhook),
+        "feishu_webhook_masked": ("*" * 8 + webhook[-6:]) if len(webhook) > 6 else ("已配置" if webhook else ""),
+        "frequency_preset": push.get("frequency_preset", "hourly_trading"),
+        "only_trading_hours": push.get("only_trading_hours", True),
+        "schedule": push.get("schedule", "0 * * * *"),
+    })
+
+
+@app.route("/api/push/config", methods=["POST"])
+def push_config_post():
+    data = request.get_json(force=True, silent=True) or {}
+    partial = {}
+    if "enabled" in data:
+        partial["enabled"] = bool(data["enabled"])
+    if "feishu_webhook" in data:
+        partial["feishu_webhook"] = str(data["feishu_webhook"]).strip()
+    if "frequency_preset" in data and data["frequency_preset"] in feishu_push.FREQUENCY_PRESETS:
+        preset = feishu_push.FREQUENCY_PRESETS[data["frequency_preset"]]
+        partial["frequency_preset"] = data["frequency_preset"]
+        partial["schedule"] = preset["schedule"]
+    if "only_trading_hours" in data:
+        partial["only_trading_hours"] = bool(data["only_trading_hours"])
+    config_mod.update_push_config(partial)
+    feishu_push.reschedule()
+    return jsonify({"ok": True, "push": config_mod.get_config().get("push", {})})
+
+
+@app.route("/api/push/test", methods=["POST"])
+def push_test():
+    cfg = config_mod.get_config()
+    webhook = (cfg.get("push", {}).get("feishu_webhook") or "").strip()
+    ok, msg = feishu_push.send_test_message(webhook)
+    return jsonify({"ok": ok, "message": msg})
+
+
+@app.route("/api/push/now", methods=["POST"])
+def push_now():
+    ok, msg = feishu_push.push_briefing_now()
+    return jsonify({"ok": ok, "message": msg})
+
+
+# 启动推送调度器（始终运行；是否推送由 scheduled_push 内部判断开关与交易时段）
+try:
+    feishu_push.setup_scheduler()
+except Exception as e:
+    print("推送调度器初始化失败:", e)
 
 
 if __name__ == "__main__":
