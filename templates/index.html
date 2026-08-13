@@ -188,13 +188,16 @@
     }
 
     .header-right {
-      text-align: right;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .header-right .date-text {
       font-size: 13px;
       color: var(--text-secondary);
-      margin-bottom: 8px;
       font-family: 'SF Mono', Menlo, Monaco, monospace;
     }
 
@@ -206,23 +209,30 @@
       font-weight: 500;
     }
 
+    .header-right .header-sep {
+      width: 1px;
+      height: 20px;
+      background: var(--border);
+    }
+
     .header-right .settings-link {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
-      margin-top: 8px;
-      padding: 4px 12px;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 8px;
       color: var(--cyan);
       text-decoration: none;
-      font-size: 12px;
+      font-size: 16px;
       transition: all 0.2s;
     }
 
     .header-right .settings-link:hover {
       border-color: var(--cyan);
       background: rgba(0,188,212,0.08);
+      transform: rotate(45deg);
     }
 
     /* ============================================== */
@@ -373,9 +383,17 @@
     /* ============================================== */
     .feature-menu {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      grid-template-columns: repeat(5, 1fr);
       gap: 10px;
       flex: 1;
+    }
+
+    @media (max-width: 900px) {
+      .feature-menu { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @media (max-width: 600px) {
+      .feature-menu { grid-template-columns: repeat(2, 1fr); }
     }
 
     .feature-card {
@@ -423,20 +441,6 @@
     .feature-card .fc-badge.action {
       background: rgba(230,126,34,0.18);
       color: var(--orange);
-    }
-
-    .feature-menu .feature-divider {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--bg-primary);
-      border: 1px dashed var(--border);
-      border-radius: 10px;
-      font-size: 11px;
-      color: var(--text-muted);
-      letter-spacing: 1px;
-      padding: 4px;
-      min-width: 64px;
     }
 
     /* ============================================== */
@@ -1253,9 +1257,10 @@
         <div class="subtitle">交易驱动持仓 · 信号命中率 · 智能预警 · 内建飞书推送</div>
       </div>
       <div class="header-right">
-        <div class="date-text" id="date-text">--</div>
+        <span class="date-text" id="date-text">--</span>
+        <span class="header-sep"></span>
         <span id="market-badge-container"></span>
-        <div><a href="/settings" class="settings-link" title="飞书推送设置">⚙ 推送设置</a></div>
+        <a href="/settings" class="settings-link" title="飞书推送设置">⚙</a>
       </div>
     </header>
 
@@ -1300,7 +1305,6 @@
             <span class="fc-title">预警中心</span>
             <span class="fc-sub">8 类规则手动检查</span>
           </a>
-          <div class="feature-divider">快捷<br>操作</div>
           <button class="feature-card" id="scan-btn" onclick="doDailyScan()">
             <span class="fc-badge action">操作</span>
             <span class="fc-icon">📊</span>
